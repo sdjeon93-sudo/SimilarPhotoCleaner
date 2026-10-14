@@ -1,0 +1,500 @@
+<Window x:Class="SimilarPhotoCleaner.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="비슷한 사진 정리기" Width="1360" Height="880" MinWidth="980" MinHeight="620"
+        WindowStartupLocation="CenterScreen" Icon="app.ico"
+        Background="{StaticResource BgBrush}" Foreground="{StaticResource TextBrush}"
+        FontFamily="Malgun Gothic" FontSize="13" UseLayoutRounding="True"
+        AllowDrop="True" Drop="Window_Drop" DragOver="Window_DragOver"
+        PreviewKeyDown="Window_PreviewKeyDown" Closing="Window_Closing">
+    <DockPanel>
+        <!-- 상단 도구 막대 -->
+        <Border DockPanel.Dock="Top" Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1" Padding="16,10">
+            <DockPanel>
+                <Button DockPanel.Dock="Left" Style="{StaticResource SecondaryButton}" Padding="10,7" Margin="0,0,8,0"
+                        Click="ToggleFolderPane_Click" ToolTip="왼쪽 폴더 목록 보이기/숨기기">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE700;" Margin="0"/>
+                </Button>
+                <Button DockPanel.Dock="Left" Style="{StaticResource SecondaryButton}" Click="PickFolder_Click"
+                        ToolTip="정리할 사진이 들어 있는 폴더를 고릅니다 (Ctrl+O)">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8B7;"/>
+                        <TextBlock Text="폴더 선택"/>
+                    </StackPanel>
+                </Button>
+                <Button x:Name="UpButton" DockPanel.Dock="Left" Style="{StaticResource CrumbButton}" Margin="10,0,2,0"
+                        Click="Up_Click" IsEnabled="False" ToolTip="상위 폴더로 (Alt+↑)">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE74A;" Margin="0"/>
+                </Button>
+
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="묶는 기준" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Text="엄격" Foreground="{StaticResource MutedBrush}" FontSize="12" VerticalAlignment="Center"/>
+                    <Slider x:Name="LevelSlider" Width="130" Margin="8,0" VerticalAlignment="Center"
+                            Minimum="1" Maximum="5" Value="3" TickFrequency="1" IsSnapToTickEnabled="True"
+                            TickPlacement="BottomRight" Focusable="False" ValueChanged="LevelSlider_ValueChanged"
+                            ToolTip="느슨하게 할수록 조금 덜 비슷한 사진도 같은 묶음으로 모읍니다"/>
+                    <TextBlock Text="느슨" Foreground="{StaticResource MutedBrush}" FontSize="12" VerticalAlignment="Center"/>
+                    <Rectangle Width="1" Height="22" Fill="{StaticResource LineBrush}" Margin="16,0"/>
+                    <TextBlock Text="지울 사진은" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <ComboBox x:Name="RemoveModeCombo" Width="200" Focusable="False" VerticalAlignment="Center"
+                              SelectionChanged="RemoveModeCombo_SelectionChanged">
+                        <ComboBoxItem Content="휴지통으로 보내기"/>
+                        <ComboBoxItem Content="'_지운 사진' 폴더로 옮기기"/>
+                    </ComboBox>
+                </StackPanel>
+
+                <CheckBox x:Name="SubfoldersCheck" DockPanel.Dock="Right" Content="하위 폴더 포함" Focusable="False"
+                          VerticalAlignment="Center" Margin="12,0,24,0" Click="SubfoldersCheck_Click"/>
+                <Button x:Name="RescanButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}"
+                        Click="Rescan_Click" IsEnabled="False" ToolTip="같은 폴더를 다시 검사합니다">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE72C;"/>
+                        <TextBlock Text="다시 검사"/>
+                    </StackPanel>
+                </Button>
+                <!-- 탐색기 주소 표시줄처럼 경로를 눌러 상위 폴더로 갈 수 있다 -->
+                <Grid VerticalAlignment="Center" Margin="0,0,12,0">
+                    <TextBlock x:Name="FolderText" Text="폴더를 선택하세요" VerticalAlignment="Center" Margin="6,0"
+                               Foreground="{StaticResource MutedBrush}"/>
+                    <!-- 경로가 길어 넘치면 끝(지금 폴더)이 보이도록 오른쪽 끝으로 스크롤해 둔다 -->
+                    <ScrollViewer x:Name="CrumbScroller" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                                  Focusable="False" SizeChanged="CrumbScroller_SizeChanged">
+                    <ItemsControl x:Name="Crumbs" VerticalAlignment="Center">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="Sep" Text="&#xE76C;" FontFamily="{StaticResource IconFont}" FontSize="9"
+                                               Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="1,0"/>
+                                    <Button x:Name="CrumbButton" Style="{StaticResource CrumbButton}" Tag="{Binding Path}"
+                                            Click="Crumb_Click" ToolTip="{Binding Path}">
+                                        <TextBlock Text="{Binding Name}" MaxWidth="160" TextTrimming="CharacterEllipsis"/>
+                                    </Button>
+                                </StackPanel>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsFirst}" Value="True">
+                                        <Setter TargetName="Sep" Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsLast}" Value="True">
+                                        <Setter TargetName="CrumbButton" Property="FontWeight" Value="SemiBold"/>
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </DockPanel>
+        </Border>
+
+        <!-- 새 버전 알림 -->
+        <Border x:Name="UpdateBanner" DockPanel.Dock="Top" Background="#EEF2FF" BorderBrush="#C7D2FE"
+                BorderThickness="0,0,0,1" Padding="16,7" Visibility="Collapsed">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button x:Name="UpdateNowButton" Style="{StaticResource PrimaryButton}" Padding="14,5"
+                            Click="UpdateNow_Click" Content="업데이트"/>
+                    <Button x:Name="UpdateLaterButton" Style="{StaticResource CrumbButton}" Margin="6,0,0,0"
+                            Click="UpdateLater_Click" Content="나중에"/>
+                </StackPanel>
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE896;" Foreground="{StaticResource PrimaryBrush}"/>
+                <TextBlock x:Name="UpdateText" VerticalAlignment="Center" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+            </DockPanel>
+        </Border>
+
+        <!-- 하단 동작 막대 -->
+        <Border x:Name="ActionBar" DockPanel.Dock="Bottom" Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" Padding="16,10" IsEnabled="False">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button x:Name="DeferButton" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0" Click="Defer_Click"
+                            ToolTip="이 묶음은 '선택 안 됨'으로 두고 다음 묶음으로 갑니다 (S)">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE823;"/>
+                            <TextBlock x:Name="DeferText" Text="나중에 고르기 (S)"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="SelectButton" Style="{StaticResource PrimaryButton}" MinWidth="230" Padding="18,9"
+                            Click="Select_Click" ToolTip="지금 고른 대로 '선택됨'으로 표시하고 다음 묶음으로 갑니다 (Enter)">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8FB;"/>
+                            <TextBlock x:Name="SelectText" Text="선택 완료 (Enter)"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock x:Name="SelectionText" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="HintText" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,3,0,0"
+                               TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="FolderColumn" Width="250"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 맨 왼쪽: 폴더 목록(탐색기처럼 폴더별로 들어가서 정리) -->
+            <Border x:Name="FolderPane" Background="#FAFAFB" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,1,0">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Margin="16,16,16,8">
+                        <TextBlock Text="폴더" FontSize="16" FontWeight="Bold"/>
+                        <TextBlock Text="폴더를 누르면 그 폴더의 사진을 정리해요. 오른쪽 숫자는 폴더 안 사진 수예요."
+                                   Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                    </StackPanel>
+                    <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" Padding="14,6">
+                        <DockPanel>
+                            <Button x:Name="CheckUpdateButton" DockPanel.Dock="Right" Style="{StaticResource CrumbButton}"
+                                    FontSize="12" Click="CheckUpdate_Click" Content="업데이트 확인"
+                                    ToolTip="GitHub에 새 버전이 있는지 확인합니다"/>
+                            <TextBlock x:Name="VersionText" Foreground="{StaticResource MutedBrush}" FontSize="12" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </Border>
+                    <TreeView x:Name="FolderTree" BorderThickness="0" Background="Transparent" Padding="6,0,4,8"
+                              SelectedItemChanged="FolderTree_SelectedItemChanged"
+                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                              VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+                        <TreeView.ItemContainerStyle>
+                            <Style TargetType="TreeViewItem">
+                                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                                <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                                <Setter Property="Padding" Value="3,4"/>
+                                <Setter Property="Cursor" Value="Hand"/>
+                            </Style>
+                        </TreeView.ItemContainerStyle>
+                        <TreeView.ItemTemplate>
+                            <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                                <StackPanel Orientation="Horizontal" ToolTip="{Binding Path}">
+                                    <TextBlock Text="{Binding Icon}" FontFamily="{StaticResource IconFont}" FontSize="14"
+                                               Foreground="#D97706" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" MaxWidth="150" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding CountText}" Foreground="{StaticResource MutedBrush}" FontSize="11"
+                                               VerticalAlignment="Center" Margin="7,0,0,0"/>
+                                </StackPanel>
+                            </HierarchicalDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                </DockPanel>
+            </Border>
+
+            <Grid Grid.Column="1">
+            <!-- 작업 화면 -->
+            <Grid x:Name="WorkArea">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="270"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 왼쪽: 묶음 목록 -->
+                <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,1,0">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Margin="18,16,18,10">
+                            <TextBlock Text="비슷한 사진 묶음" FontSize="16" FontWeight="Bold"/>
+                            <TextBlock x:Name="GroupSummaryText" Foreground="{StaticResource MutedBrush}" FontSize="12"
+                                       Margin="0,4,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+
+                        <!-- 선택한 묶음 한꺼번에 정리 -->
+                        <Border x:Name="BatchPanel" DockPanel.Dock="Bottom" BorderBrush="{StaticResource LineBrush}"
+                                BorderThickness="0,1,0,0" Padding="16,12,16,14" IsEnabled="False">
+                            <StackPanel>
+                                <TextBlock x:Name="BatchText" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource MutedBrush}"
+                                           Text="묶음마다 남길 사진을 고른 뒤, 여기서 한꺼번에 정리해요."/>
+                                <Button x:Name="BatchButton" Style="{StaticResource SuccessButton}" Margin="0,10,0,0" Padding="12,9"
+                                        Click="ApplySelected_Click" ToolTip="'선택됨' 묶음의 고르지 않은 사진을 정리합니다 (Ctrl+Enter)">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE74D;"/>
+                                        <TextBlock x:Name="BatchButtonText" Text="선택한 묶음 정리하기"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="UndoButton" Style="{StaticResource SecondaryButton}" Margin="0,6,0,0"
+                                        Click="Undo_Click" Visibility="Collapsed"
+                                        ToolTip="'_지운 사진' 폴더로 옮긴 사진을 제자리로 돌려놓습니다 (Ctrl+Z)">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE7A7;"/>
+                                        <TextBlock Text="방금 정리한 것 되돌리기"/>
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </Border>
+
+                        <ListBox x:Name="GroupList" BorderThickness="0" Background="Transparent" Focusable="False"
+                                 ItemContainerStyle="{StaticResource GroupItem}" SelectionChanged="GroupList_SelectionChanged"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.ScrollUnit="Pixel">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid x:Name="Root">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="64"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Width="64" Height="48" CornerRadius="6" Background="#E5E7EB">
+                                            <Border CornerRadius="6">
+                                                <Border.Background>
+                                                    <ImageBrush ImageSource="{Binding Cover}" Stretch="UniformToFill"/>
+                                                </Border.Background>
+                                            </Border>
+                                        </Border>
+                                        <StackPanel Grid.Column="1" Margin="10,0,2,0" VerticalAlignment="Center">
+                                            <DockPanel>
+                                                <!-- 선택 안 됨: 주황 테두리 / 선택됨: 파랑 / 정리됨: 초록 -->
+                                                <Border x:Name="StateBadge" DockPanel.Dock="Right" Style="{StaticResource Badge}" Padding="6,1"
+                                                        VerticalAlignment="Center" Background="#FFF7ED" BorderBrush="#FDBA74" BorderThickness="1">
+                                                    <TextBlock x:Name="StateText" Text="{Binding StateLabel}" FontSize="11" FontWeight="SemiBold" Foreground="#C2410C"/>
+                                                </Border>
+                                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                            </DockPanel>
+                                            <TextBlock Text="{Binding Subtitle}" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </Grid>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding State}" Value="Selected">
+                                            <Setter TargetName="StateBadge" Property="Background" Value="{StaticResource PrimaryBrush}"/>
+                                            <Setter TargetName="StateBadge" Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
+                                            <Setter TargetName="StateText" Property="Foreground" Value="White"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding State}" Value="Cleaned">
+                                            <Setter TargetName="StateBadge" Property="Background" Value="#DCFCE7"/>
+                                            <Setter TargetName="StateBadge" Property="BorderBrush" Value="#DCFCE7"/>
+                                            <Setter TargetName="StateText" Property="Foreground" Value="#15803D"/>
+                                            <Setter TargetName="Root" Property="Opacity" Value="0.55"/>
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Border>
+
+                <!-- 오른쪽: 크게 보기 + 사진 띠 -->
+                <Grid Grid.Column="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Border x:Name="PreviewHost" Background="{StaticResource StageBrush}" ClipToBounds="True"
+                            MouseWheel="Preview_MouseWheel" MouseLeftButtonDown="Preview_MouseLeftButtonDown"
+                            MouseMove="Preview_MouseMove" MouseLeftButtonUp="Preview_MouseLeftButtonUp"
+                            SizeChanged="PreviewHost_SizeChanged">
+                        <Grid>
+                            <Image x:Name="PreviewImage" Margin="16,56,16,56" Stretch="Uniform"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+
+                            <!-- 위쪽 정보 -->
+                            <DockPanel x:Name="PreviewTopBar" VerticalAlignment="Top" Margin="16,14,16,0" LastChildFill="False">
+                                <Border DockPanel.Dock="Left" Background="#99000000" CornerRadius="6" Padding="10,5">
+                                    <TextBlock x:Name="PreviewCounter" Foreground="White" FontWeight="SemiBold"/>
+                                </Border>
+                                <Border x:Name="PreviewRecommended" DockPanel.Dock="Left" Margin="8,0,0,0" Background="#F59E0B"
+                                        CornerRadius="6" Padding="10,5" Visibility="Collapsed"
+                                        ToolTip="이 묶음에서 가장 선명하고 해상도가 높은 사진">
+                                    <TextBlock Text="★ 추천" Foreground="White" FontWeight="SemiBold"/>
+                                </Border>
+                                <Border x:Name="PreviewState" DockPanel.Dock="Right" CornerRadius="6" Padding="12,5" Background="{StaticResource KeepBrush}"
+                                        Cursor="Hand" MouseLeftButtonDown="PreviewState_MouseLeftButtonDown"
+                                        ToolTip="눌러서 이 사진을 남길 사진에 더하거나 뺍니다 (Space)">
+                                    <TextBlock x:Name="PreviewStateText" Foreground="White" FontWeight="Bold"/>
+                                </Border>
+                                <Border x:Name="ZoomBadge" DockPanel.Dock="Right" Margin="0,0,8,0" Background="#99000000"
+                                        CornerRadius="6" Padding="10,5" Visibility="Collapsed">
+                                    <TextBlock x:Name="ZoomText" Foreground="White"/>
+                                </Border>
+                            </DockPanel>
+
+                            <!-- 아래쪽 정보 -->
+                            <DockPanel VerticalAlignment="Bottom" Margin="16,0,16,12">
+                                <Button DockPanel.Dock="Right" Style="{StaticResource OverlayButton}" Click="OpenOriginal_Click"
+                                        ToolTip="Windows 기본 사진 앱으로 원본을 엽니다">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8A7;" FontSize="12" Margin="0,0,6,0"/>
+                                        <TextBlock Text="원본 열기"/>
+                                    </StackPanel>
+                                </Button>
+                                <TextBlock x:Name="PreviewInfo" Foreground="#E4E4E7" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" Margin="2,0,12,0"/>
+                            </DockPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- 사진 띠 -->
+                    <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0">
+                        <ListBox x:Name="FilmStrip" Height="250" BorderThickness="0" Background="Transparent" Focusable="False"
+                                 Padding="8,0" ItemContainerStyle="{StaticResource PlainItem}"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                 ScrollViewer.CanContentScroll="False" PreviewMouseWheel="FilmStrip_PreviewMouseWheel">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border x:Name="FocusRing" Margin="4,10" Padding="3" CornerRadius="13" BorderThickness="2"
+                                            BorderBrush="Transparent" Cursor="Hand" Background="Transparent"
+                                            MouseLeftButtonDown="Card_MouseLeftButtonDown">
+                                        <Border x:Name="Card" Width="176" CornerRadius="10" BorderThickness="3"
+                                                BorderBrush="Transparent" Background="#F9FAFB">
+                                            <StackPanel>
+                                                <Grid Height="114">
+                                                    <Border CornerRadius="7,7,0,0" Background="#E5E7EB">
+                                                        <Border CornerRadius="7,7,0,0">
+                                                            <Border.Background>
+                                                                <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill"/>
+                                                            </Border.Background>
+                                                        </Border>
+                                                    </Border>
+                                                    <Border x:Name="Dim" CornerRadius="7,7,0,0" Background="#8CFFFFFF" Visibility="Collapsed"/>
+                                                    <Border x:Name="StateBadge" Style="{StaticResource Badge}" Margin="6"
+                                                            HorizontalAlignment="Left" Background="{StaticResource KeepBrush}">
+                                                        <TextBlock Text="{Binding StateText}" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                                                    </Border>
+                                                    <Border x:Name="RecommendBadge" Style="{StaticResource Badge}" Margin="6"
+                                                            HorizontalAlignment="Right" Background="#F59E0B" Visibility="Collapsed">
+                                                        <TextBlock Text="★ 추천" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                                                    </Border>
+                                                    <Button x:Name="KeepToggle" Style="{StaticResource KeepToggleButton}" Margin="6"
+                                                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Click="KeepToggle_Click"
+                                                            AutomationProperties.AutomationId="KeepToggle"
+                                                            ToolTip="이 사진도 남기기 / 빼기 (Space) — 여러 장을 남길 수 있어요"/>
+                                                </Grid>
+                                                <StackPanel Margin="9,6,9,8">
+                                                    <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding Info.Path}"/>
+                                                    <TextBlock Text="{Binding DetailText}" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,2,0,0"/>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,5,0,0" ToolTip="묶음 안에서 가장 선명한 사진과 비교한 선명도">
+                                                        <TextBlock Text="선명도" Foreground="{StaticResource MutedBrush}" FontSize="10" Width="38"/>
+                                                        <Border x:Name="SharpBar" Width="104" Height="5" CornerRadius="2.5" Background="#E5E7EB" VerticalAlignment="Center">
+                                                            <Border HorizontalAlignment="Left" Width="{Binding SharpnessBarWidth}" CornerRadius="2.5"
+                                                                    Background="{StaticResource PrimaryBrush}"/>
+                                                        </Border>
+                                                        <TextBlock x:Name="SharpPending" Text="계산 중…" Foreground="{StaticResource MutedBrush}"
+                                                                   FontSize="10" Visibility="Collapsed"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </Border>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsKept}" Value="True">
+                                            <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource KeepBrush}"/>
+                                            <Setter TargetName="KeepToggle" Property="Background" Value="{StaticResource KeepBrush}"/>
+                                            <Setter TargetName="KeepToggle" Property="BorderBrush" Value="White"/>
+                                            <Setter TargetName="KeepToggle" Property="Foreground" Value="White"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsKept}" Value="False">
+                                            <Setter TargetName="Dim" Property="Visibility" Value="Visible"/>
+                                            <Setter TargetName="StateBadge" Property="Background" Value="{StaticResource DeleteBrush}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsRecommended}" Value="True">
+                                            <Setter TargetName="RecommendBadge" Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsFocused}" Value="True">
+                                            <Setter TargetName="FocusRing" Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsRemoved}" Value="True">
+                                            <Setter TargetName="Card" Property="Opacity" Value="0.4"/>
+                                            <Setter TargetName="StateBadge" Property="Background" Value="#6B7280"/>
+                                            <Setter TargetName="KeepToggle" Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding HasSharpness}" Value="False">
+                                            <Setter TargetName="SharpBar" Property="Visibility" Value="Collapsed"/>
+                                            <Setter TargetName="SharpPending" Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <!-- 처음 화면 -->
+            <Grid x:Name="WelcomeOverlay" Background="{StaticResource BgBrush}">
+                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="16" Padding="44,38" MaxWidth="620"
+                        HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="{StaticResource LineBrush}" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock Text="&#xE91B;" FontFamily="{StaticResource IconFont}" FontSize="44"
+                                   Foreground="{StaticResource PrimaryBrush}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="비슷한 사진 정리기" FontSize="24" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,14,0,6"/>
+                        <TextBlock Text="같은 장소·같은 구도로 여러 번 찍은 사진을 자동으로 묶어 보여 드려요.&#x0a;마음에 드는 사진만 고르면 나머지는 정리됩니다."
+                                   Foreground="{StaticResource MutedBrush}" TextAlignment="Center" TextWrapping="Wrap" LineHeight="21"/>
+                        <Grid Margin="0,26,0,26">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition/>
+                                <ColumnDefinition/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="6,0">
+                                <TextBlock Text="1" FontSize="20" FontWeight="Bold" Foreground="{StaticResource PrimaryBrush}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="사진 폴더 고르기" HorizontalAlignment="Center" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                                <TextBlock Text="왼쪽 목록에서 누르거나 끌어다 놓기" FontSize="12" Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="6,0">
+                                <TextBlock Text="2" FontSize="20" FontWeight="Bold" Foreground="{StaticResource PrimaryBrush}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="남길 사진 고르기" HorizontalAlignment="Center" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                                <TextBlock Text="Enter 선택 · S 나중에" FontSize="12" Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Margin="6,0">
+                                <TextBlock Text="3" FontSize="20" FontWeight="Bold" Foreground="{StaticResource PrimaryBrush}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="한꺼번에 정리" HorizontalAlignment="Center" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                                <TextBlock Text="고르지 않은 사진은 휴지통으로" FontSize="12" Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+                        <Button Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Padding="26,11" FontSize="15"
+                                Click="PickFolder_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE8B7;"/>
+                                <TextBlock Text="사진 폴더 선택"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- 진행 상황 -->
+            <Grid x:Name="ProgressOverlay" Background="#E6F3F4F6" Visibility="Collapsed">
+                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="16" Padding="36,30" Width="460"
+                        HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="{StaticResource LineBrush}" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock x:Name="ProgressTitle" Text="사진 분석 중..." FontSize="18" FontWeight="Bold"/>
+                        <TextBlock x:Name="ProgressDetail" Foreground="{StaticResource MutedBrush}" Margin="0,6,0,16"/>
+                        <ProgressBar x:Name="ProgressBar" Height="8" Maximum="1" Foreground="{StaticResource PrimaryBrush}"
+                                     Background="#E5E7EB" BorderThickness="0"/>
+                        <Button Style="{StaticResource SecondaryButton}" HorizontalAlignment="Right" Margin="0,18,0,0"
+                                Content="중지" Click="CancelScan_Click"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- 안내 메시지 -->
+            <Grid x:Name="InfoOverlay" Background="#B3111827" Visibility="Collapsed">
+                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="16" Padding="36,30" MaxWidth="520"
+                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <StackPanel>
+                        <TextBlock x:Name="InfoTitle" FontSize="20" FontWeight="Bold" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="InfoBody" Foreground="{StaticResource MutedBrush}" Margin="0,10,0,22"
+                                   TextWrapping="Wrap" LineHeight="21"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button x:Name="InfoSecondaryButton" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
+                                    Click="InfoSecondary_Click"/>
+                            <Button x:Name="InfoPrimaryButton" Style="{StaticResource PrimaryButton}" Click="InfoPrimary_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</Window>

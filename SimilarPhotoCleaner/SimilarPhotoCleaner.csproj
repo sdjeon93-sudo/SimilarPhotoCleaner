@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>SimilarPhotoCleaner</AssemblyName>
+    <RootNamespace>SimilarPhotoCleaner</RootNamespace>
+    <Product>비슷한 사진 정리기</Product>
+    <AssemblyTitle>비슷한 사진 정리기</AssemblyTitle>
+    <Version>1.4.0</Version>
+    <SatelliteResourceLanguages>ko</SatelliteResourceLanguages>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="app.ico" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,9 @@
+# 빌드 결과 (Directory.Build.props로 로컬 폴더에 만들지만, 혹시 생기면 올리지 않는다)
+bin/
+obj/
+*.user
+.vs/
+
+# 배포용 실행 파일은 저장소가 아니라 GitHub 릴리스에 첨부한다
+*.exe
+*.pdb

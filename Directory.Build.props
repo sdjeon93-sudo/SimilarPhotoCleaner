@@ -1,0 +1,11 @@
+<Project>
+  <!--
+    이 폴더는 구글 드라이브 안에 있다. 빌드 중간 파일(bin, obj)을 여기에 쓰면 동기화와 얽혀 파일이 깨질 수 있어서
+    이 컴퓨터의 로컬 폴더(%LOCALAPPDATA%\SimilarPhotoCleaner-build)에 둔다.
+  -->
+  <PropertyGroup>
+    <LocalBuildRoot>$(LOCALAPPDATA)\SimilarPhotoCleaner-build\$(MSBuildProjectName)\</LocalBuildRoot>
+    <BaseIntermediateOutputPath>$(LocalBuildRoot)obj\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(LocalBuildRoot)bin\</BaseOutputPath>
+  </PropertyGroup>
+</Project>
