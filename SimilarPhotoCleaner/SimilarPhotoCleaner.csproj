@@ -14,6 +14,8 @@
     <Version>1.4.0</Version>
     <SatelliteResourceLanguages>ko</SatelliteResourceLanguages>
     <ApplicationIcon>app.ico</ApplicationIcon>
+    <!-- 파일 속성의 제품 버전에 git 커밋 번호(+abc123)를 붙이지 않는다 -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

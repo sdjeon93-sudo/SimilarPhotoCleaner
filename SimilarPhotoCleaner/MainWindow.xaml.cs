@@ -113,7 +113,7 @@ public partial class MainWindow : Window
             if (release != null)
             {
                 _newRelease = release;
-                UpdateText.Text = $"새 버전 {release.Version.ToString(3)}이 나왔어요. (지금 {Updater.CurrentVersion.ToString(3)})";
+                UpdateText.Text = UpdateBannerText(release);
                 UpdateBanner.Visibility = Visibility.Visible;
             }
             else if (manual)
@@ -127,6 +127,10 @@ public partial class MainWindow : Window
             CheckUpdateButton.IsEnabled = true;
         }
     }
+
+    // 숫자 뒤 조사(이/가, 으로/로)가 버전마다 달라지지 않게 버전 번호를 괄호나 '버전' 앞에 둔다.
+    private static string UpdateBannerText(Updater.Release release) =>
+        $"새 버전이 나왔어요: {release.Version.ToString(3)} (지금 쓰는 버전 {Updater.CurrentVersion.ToString(3)})";
 
     private void CheckUpdate_Click(object sender, RoutedEventArgs e)
     {
@@ -145,7 +149,7 @@ public partial class MainWindow : Window
         if (_newRelease is not { } release) return;
         string notes = release.Notes.Trim();
         if (notes.Length > 900) notes = notes[..900] + "…";
-        ShowInfo($"새 버전 {release.Version.ToString(3)}로 업데이트할까요?",
+        ShowInfo($"{release.Version.ToString(3)} 버전으로 업데이트할까요?",
             (notes.Length > 0 ? notes + "\n\n" : "") + "업데이트하면 프로그램이 잠깐 닫혔다가 새 버전으로 다시 열려요.",
             "지금 업데이트", () => _ = RunUpdateAsync(release), "나중에", null);
     }
@@ -158,7 +162,7 @@ public partial class MainWindow : Window
         UpdateNowButton.IsEnabled = false;
         UpdateLaterButton.IsEnabled = false;
         string version = release.Version.ToString(3);
-        var progress = new Progress<double>(p => UpdateText.Text = $"새 버전 {version} 받는 중… {p:P0}");
+        var progress = new Progress<double>(p => UpdateText.Text = $"새 버전({version}) 받는 중… {p:P0}");
         try
         {
             string exe = await Updater.DownloadAndSwapAsync(release, progress);
@@ -172,7 +176,7 @@ public partial class MainWindow : Window
             _updating = false;
             UpdateNowButton.IsEnabled = true;
             UpdateLaterButton.IsEnabled = true;
-            UpdateText.Text = $"새 버전 {version}이 나왔어요. (지금 {Updater.CurrentVersion.ToString(3)})";
+            UpdateText.Text = UpdateBannerText(release);
             string reason = ex switch
             {
                 UnauthorizedAccessException => "프로그램이 있는 폴더에 새 파일을 저장할 수 없어요(쓰기 권한 없음).",
