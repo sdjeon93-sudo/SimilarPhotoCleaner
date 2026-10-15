@@ -15,5 +15,11 @@
     <Compile Include="..\..\SimilarPhotoCleaner\Core\Grouper.cs" />
     <Compile Include="..\..\SimilarPhotoCleaner\ViewModels\PhotoCard.cs" />
     <Compile Include="..\..\SimilarPhotoCleaner\ViewModels\PhotoGroupView.cs" />
+    <Compile Include="..\..\SimilarPhotoCleaner\Core\UsbPhone.cs" />
+    <Compile Include="..\..\SimilarPhotoCleaner\Core\FileRemover.cs" />
+    <Compile Include="..\..\SimilarPhotoCleaner\Core\WpdDelete.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="MediaDevices" Version="2.0.0" />
   </ItemGroup>
 </Project>

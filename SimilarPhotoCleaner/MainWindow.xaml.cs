@@ -852,6 +852,19 @@ public partial class MainWindow : Window
             }
         }
 
+        // 휴대폰 연결이 막은 사진은 USB로 연결된 같은 휴대폰에서 직접 지운다(연결돼 있지 않으면 null).
+        int usbDeleted = 0;
+        bool usbTried = false;
+        var phoneBlocked = failures.Where(FileRemover.IsPhonePermissionProblem).Select(f => f.Path)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (phoneBlocked.Count > 0 && DeleteViaUsb(items.Where(c => phoneBlocked.Contains(c.Info.Path)).ToList()) is { } usbDone)
+        {
+            usbTried = true;
+            usbDeleted = usbDone.Count;
+            removed.UnionWith(usbDone);
+            failures.RemoveAll(f => usbDone.Contains(f.Path));
+        }
+
         foreach (var card in items.Where(c => removed.Contains(c.Info.Path)))
         {
             card.IsRemoved = true;
@@ -884,7 +897,13 @@ public partial class MainWindow : Window
         {
             if (failures.FirstOrDefault(FileRemover.IsPhonePermissionProblem) is { } phoneFailure)
             {
-                ShowPhoneHelp(failed, removed.Count, phoneFailure.ErrorCode);
+                if (usbTried)
+                    MessageBox.Show(this,
+                        $"사진 {failed}장은 USB로도 지우지 못했어요{(usbDeleted > 0 ? $"({usbDeleted}장은 USB로 지웠어요)" : "")}.\n" +
+                        "휴대폰에서 사진이 바뀌었거나 옮겨졌을 수 있어요. 다시 검사한 뒤 시도해 주세요.\n그 묶음은 '선택됨'으로 남겨 두었어요.",
+                        "USB로 휴대폰 사진 지우기", MessageBoxButton.OK, MessageBoxImage.Warning);
+                else
+                    ShowPhoneHelp(failed, removed.Count, phoneFailure.ErrorCode);
             }
             else
             {
@@ -896,9 +915,13 @@ public partial class MainWindow : Window
         }
 
         int undecided = _groups.Count(g => g.State == GroupState.Undecided);
-        string body = (MoveMode
-                ? $"'{FileRemover.MovedFolderName}' 폴더로 옮겼어요. 왼쪽 아래 '되돌리기'로 제자리에 돌려놓을 수 있어요."
-                : "휴지통에서 되살릴 수 있어요.")
+        string body = (usbDeleted == removed.Count && usbDeleted > 0
+                ? "휴대폰 사진을 USB로 지웠어요."
+                : MoveMode
+                    ? $"'{FileRemover.MovedFolderName}' 폴더로 옮겼어요. 왼쪽 아래 '되돌리기'로 제자리에 돌려놓을 수 있어요."
+                    : "휴지통에서 되살릴 수 있어요.")
+            + (usbDeleted > 0 && usbDeleted < removed.Count ? $"\n이 중 휴대폰 사진 {usbDeleted}장은 USB로 지웠어요." : "")
+            + (usbDeleted > 0 && _usbBackedUp ? "\n지운 휴대폰 사진의 복사본은 PC 휴지통에 있어요." : "")
             + (undecided > 0 ? $"\n아직 '선택 안 됨' 묶음이 {undecided}개 남았어요." : "");
         if (undecided > 0)
             ShowInfo($"사진 {removed.Count}장을 정리했어요", body, "남은 묶음 고르기", GoToNextUndecided, "닫기", null);
@@ -1065,13 +1088,12 @@ public partial class MainWindow : Window
         if (_removedCount > 0) lines.Add($"정리한 사진 {_removedCount:N0}장 ({Format.Size(_removedBytes)})");
         if (_scanNote.Length > 0) lines.Add(_scanNote);
         if (_root != null && FileRemover.IsPhoneLinkPath(_root))
-            lines.Add("휴대폰 연결 폴더예요. 카메라로 찍은 사진은 안드로이드 보안 때문에 PC에서 지워지지 않을 수 있어요.");
+            lines.Add("휴대폰 연결 폴더예요. 카메라로 찍은 사진은 휴대폰 연결로는 지워지지 않아서, USB 케이블로도 연결해 두면 USB로 지워요.");
         GroupSummaryText.Text = string.Join("\n", lines);
     }
 
     /// <summary>
-    /// 휴대폰 연결(Phone Link) 폴더에서 지우기가 거부됐을 때. 휴대폰의 사진 폴더(DCIM)는 보호되어 있어서,
-    /// 'Windows와 연결' 앱에 '모든 파일 관리' 권한이 없으면 카메라가 찍은 사진을 PC에서 지우거나 옮길 수 없다.
+    /// 휴대폰 연결(Phone Link) 폴더에서 지우기가 거부됐는데 USB로 연결된 휴대폰도 없을 때. USB로 연결하는 방법을 알려 준다.
     /// </summary>
     private void ShowPhoneHelp(int failed, int done, int errorCode)
     {
@@ -1082,11 +1104,128 @@ public partial class MainWindow : Window
             $"사진 {failed}장을 정리하지 못했어요{doneText}.\n" +
             "'휴대폰과 연결'(Windows와 연결)로 연 휴대폰 사진 폴더는 안드로이드 보안 때문에 카메라로 찍은 사진을 PC에서 지우거나 옮길 수 없어요. " +
             "휴대폰의 앱 권한을 모두 허용해도 바뀌지 않아요.\n\n" +
-            "이렇게 해 보세요\n" +
-            "• 휴대폰 사진을 PC 폴더로 옮겨(복사 후 휴대폰에서 지우기) 이 프로그램으로 정리하기\n" +
-            "• 또는 휴대폰을 USB 케이블로 연결해 '파일 전송'을 고른 뒤, 휴대폰 갤러리에서 직접 지우기\n\n" +
+            "USB로 지우기\n" +
+            "1. 휴대폰을 USB 케이블로 PC에 연결해요.\n" +
+            "2. 휴대폰 알림의 USB 설정에서 '파일 전송'을 고르고, 데이터 접근을 묻으면 '허용'을 눌러요.\n" +
+            "3. 아래 '다시 시도'를 누르면 USB로 휴대폰에서 직접 지워요.\n\n" +
             $"고른 묶음은 '선택됨'으로 남겨 두었어요. (오류 코드 0x{errorCode:X8})",
-            "확인", null, "다시 시도", () => ApplySelected(confirm: false));
+            "다시 시도", () => ApplySelected(confirm: false), "닫기", null);
+    }
+
+    private bool _usbBackedUp;
+
+    /// <summary>
+    /// 휴대폰 연결이 막은 사진을 USB로 연결된 같은 휴대폰(이름이 같거나, 한 대뿐이면 그 휴대폰)에서 지운다.
+    /// USB로 지우면 휴대폰 휴지통에 남지 않으므로, 원하면 지우기 전에 PC 휴지통에 복사본을 남긴다.
+    /// USB 휴대폰이 없으면 null, 사용자가 취소하면 빈 목록. 지운 휴대폰 연결 경로들을 돌려준다.
+    /// </summary>
+    private HashSet<string>? DeleteViaUsb(List<PhotoCard> cards)
+    {
+        _usbBackedUp = false;
+        var items = cards
+            .Select(c => (Card: c, Parsed: UsbPhone.ParsePhoneLinkPath(c.Info.Path)))
+            .Where(x => x.Parsed != null)
+            .Select(x => new UsbPhone.PhoneLinkItem(x.Card.Info.Path, x.Parsed!.Value.Relative, x.Card.Info.FileSize))
+            .ToList();
+        if (items.Count == 0) return null;
+        string deviceName = UsbPhone.ParsePhoneLinkPath(items[0].LinkPath)!.Value.Device;
+
+        var phones = WaitWithUi(_ => UsbPhone.ListAsync(), "USB로 연결된 휴대폰을 찾는 중…", fallback: new List<UsbPhone.Info>());
+        var info = phones.FirstOrDefault(p => p.Name.Equals(deviceName, StringComparison.OrdinalIgnoreCase))
+                   ?? (phones.Count == 1 ? phones[0] : null);
+        if (info == null) return null;
+
+        long bytes = items.Sum(i => i.Size);
+        var answer = MessageBox.Show(this,
+            $"휴대폰 사진 {items.Count}장은 휴대폰 연결로는 지울 수 없어서, USB로 연결된 '{info.Name}'에서 직접 지워요.\n" +
+            "USB로 지운 사진은 휴대폰 휴지통에 남지 않아요.\n\n" +
+            $"예: PC 휴지통에 복사본({Format.Size(bytes)})을 남기고 지우기\n아니요: 복사본 없이 지우기\n취소: 지우지 않기",
+            "USB로 휴대폰 사진 지우기", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
+        if (answer == MessageBoxResult.Cancel || answer == MessageBoxResult.None) return [];
+        bool backup = answer == MessageBoxResult.Yes;
+
+        string backupDir = Path.Combine(Path.GetTempPath(), "비슷한 사진 정리기 휴대폰 복사본", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+        if (backup)
+        {
+            long free = new DriveInfo(Path.GetPathRoot(backupDir)!).AvailableFreeSpace;
+            if (bytes > free - (500L << 20))
+            {
+                var ok = MessageBox.Show(this,
+                    $"PC 디스크 여유 공간({Format.Size(free)})이 부족해서 복사본({Format.Size(bytes)})을 만들 수 없어요.\n복사본 없이 지울까요?",
+                    "USB로 휴대폰 사진 지우기", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+                if (ok != MessageBoxResult.OK) return [];
+                backup = false;
+            }
+        }
+
+        // 1) 복사본: 휴대폰 연결이 받아 둔 파일을 복사한다. 복사하지 못한 사진은 지우지 않는다.
+        var copies = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (backup)
+        {
+            WaitWithUi(progress => Task.Run(() =>
+            {
+                for (int i = 0; i < items.Count; i++)
+                {
+                    progress.Report($"{i + 1} / {items.Count}장");
+                    try
+                    {
+                        string target = Path.Combine(backupDir, items[i].Relative);
+                        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                        File.Copy(items[i].LinkPath, target, overwrite: true);
+                        copies[items[i].LinkPath] = target;
+                    }
+                    catch { }
+                }
+                return true;
+            }), "지우기 전에 PC에 복사본을 만드는 중…");
+            items = items.Where(i => copies.ContainsKey(i.LinkPath)).ToList();
+            if (items.Count == 0) { try { Directory.Delete(backupDir, recursive: true); } catch { } return []; }
+        }
+
+        // 2) USB로 지운다.
+        var deleted = WaitWithUi(async progress =>
+        {
+            using var phone = await UsbPhone.OpenAsync(info.Id) ?? throw new IOException("USB 휴대폰에 연결하지 못했어요.");
+            return await phone.DeletePhoneLinkFilesAsync(items, progress);
+        }, "USB로 휴대폰 사진을 지우는 중…", fallback: []);
+
+        // 3) 지운 사진의 복사본은 PC 휴지통으로 보내고, 지우지 못한 사진의 복사본은 치운다.
+        if (copies.Count > 0)
+        {
+            var toRecycle = copies.Where(c => deleted.Contains(c.Key)).Select(c => c.Value).ToList();
+            FileRemover.SendToRecycleBin(toRecycle, new WindowInteropHelper(this).Handle);
+            _usbBackedUp = toRecycle.Count > 0;
+            try { Directory.Delete(backupDir, recursive: true); } catch { }
+        }
+        return deleted;
+    }
+
+    /// <summary>
+    /// 오래 걸리는 작업을 기다리는 동안 진행 창을 보여 주고 화면 조작을 막는다(정리하기처럼 결과를 바로 써야 하는 곳에서 쓴다).
+    /// </summary>
+    private T WaitWithUi<T>(Func<IProgress<string>, Task<T>> work, string title, T fallback = default!)
+    {
+        var root = (UIElement)Content;
+        bool wasVisible = ProgressOverlay.Visibility == Visibility.Visible;
+        ProgressOverlay.Visibility = Visibility.Visible;
+        ProgressTitle.Text = title;
+        ProgressDetail.Text = "";
+        ProgressBar.IsIndeterminate = true;
+        root.IsEnabled = false;
+        try
+        {
+            var task = work(new Progress<string>(s => ProgressDetail.Text = s));
+            var frame = new DispatcherFrame();
+            task.ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
+            Dispatcher.PushFrame(frame);
+            return task.IsCompletedSuccessfully ? task.Result : fallback;
+        }
+        finally
+        {
+            root.IsEnabled = true;
+            ProgressBar.IsIndeterminate = false;
+            if (!wasVisible) ProgressOverlay.Visibility = Visibility.Collapsed;
+        }
     }
 
     private void UpdateActionBar()

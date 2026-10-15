@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -11,7 +11,7 @@
     <RootNamespace>SimilarPhotoCleaner</RootNamespace>
     <Product>비슷한 사진 정리기</Product>
     <AssemblyTitle>비슷한 사진 정리기</AssemblyTitle>
-    <Version>1.7.0</Version>
+    <Version>1.8.0</Version>
     <SatelliteResourceLanguages>ko</SatelliteResourceLanguages>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <!-- 파일 속성의 제품 버전에 git 커밋 번호(+abc123)를 붙이지 않는다 -->
@@ -20,6 +20,11 @@
 
   <ItemGroup>
     <Resource Include="app.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- USB로 연결한 휴대폰(MTP) 다루기. MIT 라이선스 -->
+    <PackageReference Include="MediaDevices" Version="2.0.0" />
   </ItemGroup>
 
 </Project>

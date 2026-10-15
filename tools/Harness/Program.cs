@@ -16,6 +16,11 @@ var thread = new Thread(() =>
         case "bench": Bench(args[1]); break;
         case "thumbtest": ThumbTest(args[1]); break;
         case "scaling": Scaling(args[1]); break;
+        case "usbhead": UsbHeadProbe(); break;
+        case "usbtest": UsbDeleteTest(args); break;
+        case "usbfind": UsbFindProbe(); break;
+        case "usbhead2": UsbHeadProbe2(); break;
+        case "usb": UsbProbe(args.Length > 1 ? args[1] : ""); break;
         case "tilt": TiltTest(args[1]); break;
         case "quick": QuickTest(args[1]); break;
         default: Test(args[1]); break;
@@ -382,3 +387,153 @@ static void Save(BitmapSource bmp, string path, DateTime taken, int quality = 88
     enc.Save(fs);
 }
 
+
+// USB 휴대폰 점검: 기기·저장 공간·DCIM 폴더, 폴더별 사진 수, (speed) Camera 사진 3장 받기 속도. 사진은 지우지 않는다.
+static void UsbProbe(string arg)
+{
+    var phones = UsbPhone.ListAsync().GetAwaiter().GetResult();
+    Console.WriteLine($"USB 휴대폰 {phones.Count}대");
+    foreach (var info in phones)
+    {
+        Console.WriteLine($"- {info.Name}");
+        using var phone = UsbPhone.OpenAsync(info.Id).GetAwaiter().GetResult()!;
+        foreach (var storage in phone.GetStoragesAsync().GetAwaiter().GetResult())
+        {
+            Console.WriteLine($"  저장 공간: {storage}");
+            List<string> folders;
+            try { folders = phone.GetFoldersAsync(storage + @"\DCIM").GetAwaiter().GetResult(); } catch { continue; }
+            foreach (var f in folders)
+            {
+                var sw = Stopwatch.StartNew();
+                var files = phone.GetImagesAsync(f, false, default).GetAwaiter().GetResult();
+                Console.WriteLine($"    {f}: 사진 {files.Count}장, {files.Sum(x => x.Size) / 1048576.0:0} MB (목록 {sw.ElapsedMilliseconds} ms)");
+                if (arg == "speed" && f.EndsWith(@"\Camera") && files.Count > 0)
+                {
+                    var tmp = Path.Combine(Path.GetTempPath(), "spc_usb_probe.jpg");
+                    foreach (var file in files.Take(3))
+                    {
+                        sw.Restart();
+                        phone.DownloadAsync(file.Path, tmp, default).GetAwaiter().GetResult();
+                        Console.WriteLine($"      받기 {Path.GetFileName(file.Path)} {file.Size / 1048576.0:0.0} MB: {sw.ElapsedMilliseconds} ms");
+                    }
+                    File.Delete(tmp);
+                }
+            }
+        }
+    }
+}
+
+// USB 앞부분 읽기 속도: Camera 사진 20장의 앞 256KB만 읽는다.
+static void UsbHeadProbe()
+{
+    var info = UsbPhone.ListAsync().GetAwaiter().GetResult().First();
+    using var phone = UsbPhone.OpenAsync(info.Id).GetAwaiter().GetResult()!;
+    string storage = phone.GetStoragesAsync().GetAwaiter().GetResult().First();
+    var files = phone.GetImagesAsync(storage + @"\DCIM\Camera", false, default).GetAwaiter().GetResult().Take(20).ToList();
+    var sw = Stopwatch.StartNew();
+    int ok = 0;
+    foreach (var f in files)
+    {
+        var head = phone.ReadHeadAsync(f.Path, 256 * 1024).GetAwaiter().GetResult();
+        if (ImageLoader.TryLoadEmbeddedThumbnail(head) != null) ok++;
+    }
+    Console.WriteLine($"앞부분 읽기 {files.Count}장: {sw.ElapsedMilliseconds} ms (장당 {sw.Elapsed.TotalMilliseconds / files.Count:0} ms), 내장 썸네일 {ok}장");
+}
+
+// 목록에서 얻은 파일 정보로 바로 읽기: 앞 256KB / 휴대폰 미리보기
+static void UsbHeadProbe2()
+{
+    var dev = (MediaDevices.MediaDeviceManager.Instance.GetDevices() ?? []).First();
+    dev.Connect();
+    var storage = dev.GetDirectories(@"\").First();
+    var sw = Stopwatch.StartNew();
+    var files = dev.GetDirectoryInfo(storage + @"\DCIM\Camera").EnumerateFiles().Take(20).ToList();
+    Console.WriteLine($"20장 정보 얻기: {sw.ElapsedMilliseconds} ms");
+    sw.Restart();
+    int ok = 0;
+    foreach (var f in files)
+    {
+        using var s = f.OpenRead();
+        var buf = new byte[256 * 1024]; int read = 0;
+        while (read < buf.Length) { int n = s.Read(buf, read, buf.Length - read); if (n == 0) break; read += n; }
+        if (ImageLoader.TryLoadEmbeddedThumbnail(buf[..read]) != null) ok++;
+    }
+    Console.WriteLine($"OpenRead 앞 256KB 20장: {sw.ElapsedMilliseconds} ms (장당 {sw.Elapsed.TotalMilliseconds / 20:0}), 썸네일 {ok}장");
+    sw.Restart();
+    long bytes = 0;
+    foreach (var f in files)
+    {
+        using var s = f.OpenThumbnail(); using var ms = new MemoryStream(); s.CopyTo(ms); bytes += ms.Length;
+    }
+    Console.WriteLine($"OpenThumbnail 20장: {sw.ElapsedMilliseconds} ms (장당 {sw.Elapsed.TotalMilliseconds / 20:0}), 평균 {bytes / 20 / 1024} KB");
+    sw.Restart();
+    foreach (var f in files.Take(5)) { using var ms = new MemoryStream(); using var s = f.OpenRead(); s.CopyTo(ms); }
+    Console.WriteLine($"OpenRead 전체 5장: {sw.ElapsedMilliseconds} ms (장당 {sw.Elapsed.TotalMilliseconds / 5:0})");
+    dev.Disconnect();
+}
+
+// USB 삭제 시험: 시험 사진 두 장을 휴대폰 DCIM\SPC_test에 올리고, 휴대폰 연결에 보이는지·지워지는지 본다.
+// usbtest up <사진1> <사진2> | usbtest check | usbtest delete | usbtest clean
+static void UsbDeleteTest(string[] a)
+{
+    var info = UsbPhone.ListAsync().GetAwaiter().GetResult().First();
+    using var phone = UsbPhone.OpenAsync(info.Id).GetAwaiter().GetResult()!;
+    string storage = phone.GetStoragesAsync().GetAwaiter().GetResult().First();
+    string folder = storage + @"\DCIM\" + (Environment.GetEnvironmentVariable("SPC_FOLDER") ?? "SPC_test");
+    string link = Path.Combine(FileRemover.PhoneLinkRoot, info.Name, "storage", "DCIM", Environment.GetEnvironmentVariable("SPC_FOLDER") ?? "SPC_test");
+    var sw = Stopwatch.StartNew();
+    switch (a[1])
+    {
+        case "up":
+            phone.UploadAsync(a[2], folder + @"\spc_a.jpg").GetAwaiter().GetResult();
+            phone.UploadAsync(a[3], folder + @"\spc_b.jpg").GetAwaiter().GetResult();
+            Console.WriteLine($"올림 {sw.ElapsedMilliseconds} ms");
+            break;
+        case "check":
+            foreach (var f in phone.GetImagesAsync(folder, false, default).GetAwaiter().GetResult()) Console.WriteLine($"USB: {f.Path} {f.Size}");
+            Console.WriteLine($"휴대폰 연결 폴더: {(Directory.Exists(link) ? string.Join(", ", Directory.GetFiles(link).Select(Path.GetFileName)) : "없음")}");
+            break;
+        case "find":
+            foreach (var f in Directory.GetFiles(link))
+            {
+                sw.Restart();
+                var p = UsbPhone.ParsePhoneLinkPath(f)!.Value;
+                var found = phone.FindPhoneLinkFileAsync(p.Relative, new FileInfo(f).Length).GetAwaiter().GetResult();
+                Console.WriteLine($"{Path.GetFileName(f)} → {found} ({sw.ElapsedMilliseconds} ms)");
+            }
+            break;
+        case "delete":
+            var target = Path.Combine(link, "spc_b.jpg");
+            var rel = UsbPhone.ParsePhoneLinkPath(target)!.Value.Relative;
+            var gone = phone.DeletePhoneLinkFilesAsync([new UsbPhone.PhoneLinkItem(target, rel, new FileInfo(target).Length)],
+                new Progress<string>(Console.WriteLine)).GetAwaiter().GetResult();
+            Console.WriteLine($"USB로 지움: {gone.Count}장 ({sw.ElapsedMilliseconds} ms)");
+            break;
+        case "leftover": // 1.2에서 옮기기 실패로 남은 빈 폴더 DCIM\_지운 사진\Camera. 비어 있을 때만 지운다(recursive: false)
+            string moved = storage + @"\DCIM\" + FileRemover.MovedFolderName;
+            Console.WriteLine($"사진 {phone.GetImagesAsync(moved, true, default).GetAwaiter().GetResult().Count}장");
+            foreach (var p in new[] { moved + @"\Camera", moved })
+                try { phone.DeleteFolderAsync(p, false).GetAwaiter().GetResult(); Console.WriteLine($"지움: {p}"); }
+                catch (Exception ex) { Console.WriteLine($"못 지움: {p} {ex.Message}"); }
+            break;
+        case "clean":
+            phone.DeleteFolderAsync(folder, true).GetAwaiter().GetResult();
+            Console.WriteLine($"시험 폴더 지움 {sw.ElapsedMilliseconds} ms, 남음: {phone.GetFoldersAsync(storage + @"\DCIM").GetAwaiter().GetResult().Any(x => x.EndsWith("SPC_test"))}");
+            break;
+    }
+}
+
+// 큰 폴더에서 찾기 속도(읽기만): 휴대폰 연결 Camera 폴더의 파일 3개를 USB에서 찾는다.
+static void UsbFindProbe()
+{
+    var info = UsbPhone.ListAsync().GetAwaiter().GetResult().First();
+    using var phone = UsbPhone.OpenAsync(info.Id).GetAwaiter().GetResult()!;
+    string cam = Path.Combine(FileRemover.PhoneLinkRoot, info.Name, "storage", "DCIM", "Camera");
+    foreach (var f in Directory.EnumerateFiles(cam).Skip(300).Take(10))
+    {
+        var sw = Stopwatch.StartNew();
+        var p = UsbPhone.ParsePhoneLinkPath(f)!.Value;
+        var found = phone.FindPhoneLinkFileAsync(p.Relative, new FileInfo(f).Length).GetAwaiter().GetResult();
+        Console.WriteLine($"{Path.GetFileName(f)} → {(found ?? "못 찾음")} ({sw.ElapsedMilliseconds} ms)");
+    }
+}
