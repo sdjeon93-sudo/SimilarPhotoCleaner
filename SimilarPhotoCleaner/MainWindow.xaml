@@ -4,58 +4,37 @@
         Title="비슷한 사진 정리기" Width="1360" Height="880" MinWidth="980" MinHeight="620"
         WindowStartupLocation="CenterScreen" Icon="app.ico"
         Background="{StaticResource BgBrush}" Foreground="{StaticResource TextBrush}"
-        FontFamily="Malgun Gothic" FontSize="13" UseLayoutRounding="True"
+        FontFamily="Segoe UI, Malgun Gothic" FontSize="13" UseLayoutRounding="True" TextOptions.TextFormattingMode="Display"
         AllowDrop="True" Drop="Window_Drop" DragOver="Window_DragOver"
-        PreviewKeyDown="Window_PreviewKeyDown" Closing="Window_Closing">
-    <DockPanel>
-        <!-- 상단 도구 막대 -->
-        <Border DockPanel.Dock="Top" Background="{StaticResource SurfaceBrush}"
-                BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1" Padding="16,10">
-            <DockPanel>
-                <Button DockPanel.Dock="Left" Style="{StaticResource SecondaryButton}" Padding="10,7" Margin="0,0,8,0"
-                        Click="ToggleFolderPane_Click" ToolTip="왼쪽 폴더 목록 보이기/숨기기">
-                    <TextBlock Style="{StaticResource Icon}" Text="&#xE700;" Margin="0"/>
-                </Button>
-                <Button DockPanel.Dock="Left" Style="{StaticResource SecondaryButton}" Click="PickFolder_Click"
-                        ToolTip="정리할 사진이 들어 있는 폴더를 고릅니다 (Ctrl+O)">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8B7;"/>
-                        <TextBlock Text="폴더 선택"/>
+        PreviewKeyDown="Window_PreviewKeyDown" Closing="Window_Closing" SizeChanged="Window_SizeChanged">
+    <DockPanel Background="{StaticResource BgBrush}">
+        <!-- Navigation and settings are separated so paths remain usable on small windows. -->
+        <Border DockPanel.Dock="Top" Background="{StaticResource SurfaceBrush}" Padding="20,14,20,12"
+                BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1">
+            <StackPanel>
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,24,0">
+                        <Border Width="38" Height="38" CornerRadius="12" Background="{StaticResource PrimaryBrush}" Margin="0,0,12,0">
+                            <TextBlock Text="&#xE91B;" FontFamily="{StaticResource IconFont}" FontSize="20" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel>
+                            <TextBlock Text="비슷한 사진 정리기" FontSize="20" FontWeight="Bold"/>
+                            <TextBlock Text="좋은 순간만, 가볍게 남기세요" FontSize="11" Foreground="{StaticResource MutedBrush}"/>
+                        </StackPanel>
                     </StackPanel>
-                </Button>
-                <Button x:Name="UpButton" DockPanel.Dock="Left" Style="{StaticResource CrumbButton}" Margin="10,0,2,0"
-                        Click="Up_Click" IsEnabled="False" ToolTip="상위 폴더로 (Alt+↑)">
-                    <TextBlock Style="{StaticResource Icon}" Text="&#xE74A;" Margin="0"/>
-                </Button>
-
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="묶는 기준" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                    <TextBlock Text="엄격" Foreground="{StaticResource MutedBrush}" FontSize="12" VerticalAlignment="Center"/>
-                    <Slider x:Name="LevelSlider" Width="130" Margin="8,0" VerticalAlignment="Center"
-                            Minimum="1" Maximum="5" Value="3" TickFrequency="1" IsSnapToTickEnabled="True"
-                            TickPlacement="BottomRight" Focusable="False" ValueChanged="LevelSlider_ValueChanged"
-                            ToolTip="느슨하게 할수록 조금 덜 비슷한 사진도 같은 묶음으로 모읍니다"/>
-                    <TextBlock Text="느슨" Foreground="{StaticResource MutedBrush}" FontSize="12" VerticalAlignment="Center"/>
-                    <Rectangle Width="1" Height="22" Fill="{StaticResource LineBrush}" Margin="16,0"/>
-                    <TextBlock Text="지울 사진은" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                    <ComboBox x:Name="RemoveModeCombo" Width="200" Focusable="False" VerticalAlignment="Center"
-                              SelectionChanged="RemoveModeCombo_SelectionChanged">
-                        <ComboBoxItem Content="휴지통으로 보내기"/>
-                        <ComboBoxItem Content="'_지운 사진' 폴더로 옮기기"/>
-                    </ComboBox>
-                </StackPanel>
-
-                <CheckBox x:Name="SubfoldersCheck" DockPanel.Dock="Right" Content="하위 폴더 포함" Focusable="False"
-                          VerticalAlignment="Center" Margin="12,0,24,0" Click="SubfoldersCheck_Click"/>
-                <Button x:Name="RescanButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}"
-                        Click="Rescan_Click" IsEnabled="False" ToolTip="같은 폴더를 다시 검사합니다">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource Icon}" Text="&#xE72C;"/>
-                        <TextBlock Text="다시 검사"/>
-                    </StackPanel>
-                </Button>
-                <!-- 탐색기 주소 표시줄처럼 경로를 눌러 상위 폴더로 갈 수 있다 -->
-                <Grid VerticalAlignment="Center" Margin="0,0,12,0">
+                    <Button x:Name="RescanButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Click="Rescan_Click" IsEnabled="False" Margin="12,0,0,0" ToolTip="같은 폴더를 다시 검사합니다">
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE72C;"/><TextBlock Text="다시 검사"/></StackPanel>
+                    </Button>
+                    <Button DockPanel.Dock="Left" Style="{StaticResource CrumbButton}" Padding="10,8" Margin="0,0,6,0" Click="ToggleFolderPane_Click" ToolTip="왼쪽 폴더 목록 보이기/숨기기" AutomationProperties.Name="폴더 목록 보이기/숨기기">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE700;" Margin="0"/>
+                    </Button>
+                    <Button DockPanel.Dock="Left" Style="{StaticResource PrimaryButton}" Click="PickFolder_Click" ToolTip="사진 폴더 선택 (Ctrl+O)">
+                        <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE8B7;"/><TextBlock Text="폴더 선택"/></StackPanel>
+                    </Button>
+                    <Button x:Name="UpButton" DockPanel.Dock="Left" Style="{StaticResource CrumbButton}" Margin="8,0,2,0" Click="Up_Click" IsEnabled="False" ToolTip="상위 폴더로 (Alt+↑)" AutomationProperties.Name="상위 폴더로">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE74A;" Margin="0"/>
+                    </Button>
+                                    <Grid VerticalAlignment="Center" Margin="0,0,12,0">
                     <TextBlock x:Name="FolderText" Text="폴더를 선택하세요" VerticalAlignment="Center" Margin="6,0"
                                Foreground="{StaticResource MutedBrush}"/>
                     <!-- 경로가 길어 넘치면 끝(지금 폴더)이 보이도록 오른쪽 끝으로 스크롤해 둔다 -->
@@ -90,11 +69,28 @@
                     </ItemsControl>
                     </ScrollViewer>
                 </Grid>
-            </DockPanel>
+                </DockPanel>
+                <Border Background="#F8F8FA" CornerRadius="14" Padding="14,5" Margin="0,12,0,0">
+                    <DockPanel>
+                        <CheckBox x:Name="SubfoldersCheck" DockPanel.Dock="Right" Style="{StaticResource SwitchCheckBox}" Content="하위 폴더 포함" Focusable="False" VerticalAlignment="Center" Margin="16,0,0,0" Click="SubfoldersCheck_Click"/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="묶는 기준" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                            <TextBlock Text="엄격" Foreground="{StaticResource MutedBrush}" FontSize="11" VerticalAlignment="Center"/>
+                            <Slider x:Name="LevelSlider" Style="{StaticResource IosSlider}" Width="132" Margin="10,0" VerticalAlignment="Center" Minimum="1" Maximum="5" Value="3" TickFrequency="1" IsSnapToTickEnabled="True" Focusable="False" ValueChanged="LevelSlider_ValueChanged" AutomationProperties.Name="사진 묶는 기준" ToolTip="느슨하게 할수록 조금 덜 비슷한 사진도 같은 묶음으로 모읍니다"/>
+                            <TextBlock Text="느슨" Foreground="{StaticResource MutedBrush}" FontSize="11" VerticalAlignment="Center"/>
+                            <Rectangle Width="1" Height="20" Fill="{StaticResource LineBrush}" Margin="20,0"/>
+                            <TextBlock Text="정리 방식" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <ComboBox x:Name="RemoveModeCombo" Style="{StaticResource IosComboBox}" Width="216" Focusable="False" VerticalAlignment="Center" SelectionChanged="RemoveModeCombo_SelectionChanged" AutomationProperties.Name="사진 정리 방식">
+                                <ComboBoxItem Content="휴지통으로 보내기"/>
+                                <ComboBoxItem Content="'_지운 사진' 폴더로 옮기기"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+            </StackPanel>
         </Border>
-
         <!-- 새 버전 알림 -->
-        <Border x:Name="UpdateBanner" DockPanel.Dock="Top" Background="#EEF2FF" BorderBrush="#C7D2FE"
+        <Border x:Name="UpdateBanner" DockPanel.Dock="Top" Background="#E5F0FF" BorderBrush="#C7D2FE"
                 BorderThickness="0,0,0,1" Padding="16,7" Visibility="Collapsed">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
@@ -110,7 +106,7 @@
 
         <!-- 하단 동작 막대 -->
         <Border x:Name="ActionBar" DockPanel.Dock="Bottom" Background="{StaticResource SurfaceBrush}"
-                BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" Padding="16,10" IsEnabled="False">
+                BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" Padding="22,14" IsEnabled="False">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button x:Name="DeferButton" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0" Click="Defer_Click"
@@ -138,16 +134,16 @@
 
         <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="FolderColumn" Width="250"/>
+                <ColumnDefinition x:Name="FolderColumn" Width="224"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
             <!-- 맨 왼쪽: 폴더 목록(탐색기처럼 폴더별로 들어가서 정리) -->
-            <Border x:Name="FolderPane" Background="#FAFAFB" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,1,0">
+            <Border x:Name="FolderPane" Background="#F2F2F7" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,1,0">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Margin="16,16,16,8">
-                        <TextBlock Text="폴더" FontSize="16" FontWeight="Bold"/>
-                        <TextBlock Text="폴더를 누르면 그 폴더의 사진을 정리해요. 오른쪽 숫자는 폴더 안 사진 수예요."
+                        <TextBlock Text="라이브러리" FontSize="19" FontWeight="Bold"/>
+                        <TextBlock Text="정리할 사진이 있는 폴더를 골라주세요."
                                    Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
                     </StackPanel>
                     <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" Padding="14,6">
@@ -166,7 +162,7 @@
                             <Style TargetType="TreeViewItem">
                                 <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
                                 <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
-                                <Setter Property="Padding" Value="3,4"/>
+                                <Setter Property="Padding" Value="5,7"/>
                                 <Setter Property="Cursor" Value="Hand"/>
                             </Style>
                         </TreeView.ItemContainerStyle>
@@ -174,8 +170,8 @@
                             <HierarchicalDataTemplate ItemsSource="{Binding Children}">
                                 <StackPanel Orientation="Horizontal" ToolTip="{Binding Path}">
                                     <TextBlock Text="{Binding Icon}" FontFamily="{StaticResource IconFont}" FontSize="14"
-                                               Foreground="#D97706" VerticalAlignment="Center" Margin="0,0,7,0"/>
-                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" MaxWidth="150" TextTrimming="CharacterEllipsis"/>
+                                               Foreground="{StaticResource PrimaryBrush}" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" MaxWidth="128" TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Text="{Binding CountText}" Foreground="{StaticResource MutedBrush}" FontSize="11"
                                                VerticalAlignment="Center" Margin="7,0,0,0"/>
                                 </StackPanel>
@@ -189,22 +185,22 @@
             <!-- 작업 화면 -->
             <Grid x:Name="WorkArea">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="270"/>
+                    <ColumnDefinition Width="292"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
                 <!-- 왼쪽: 묶음 목록 -->
                 <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,1,0">
                     <DockPanel>
-                        <StackPanel DockPanel.Dock="Top" Margin="18,16,18,10">
-                            <TextBlock Text="비슷한 사진 묶음" FontSize="16" FontWeight="Bold"/>
+                        <StackPanel DockPanel.Dock="Top" Margin="20,20,20,14">
+                            <TextBlock Text="비슷한 사진" FontSize="22" FontWeight="Bold"/>
                             <TextBlock x:Name="GroupSummaryText" Foreground="{StaticResource MutedBrush}" FontSize="12"
                                        Margin="0,4,0,0" TextWrapping="Wrap"/>
                         </StackPanel>
 
                         <!-- 선택한 묶음 한꺼번에 정리 -->
                         <Border x:Name="BatchPanel" DockPanel.Dock="Bottom" BorderBrush="{StaticResource LineBrush}"
-                                BorderThickness="0,1,0,0" Padding="16,12,16,14" IsEnabled="False">
+                                BorderThickness="0,1,0,0" Padding="16,16,16,18" IsEnabled="False">
                             <StackPanel>
                                 <TextBlock x:Name="BatchText" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource MutedBrush}"
                                            Text="묶음마다 남길 사진을 고른 뒤, 여기서 한꺼번에 정리해요."/>
@@ -245,8 +241,8 @@
                                             <ColumnDefinition Width="64"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <Border Width="64" Height="48" CornerRadius="6" Background="#E5E7EB">
-                                            <Border CornerRadius="6">
+                                        <Border Width="64" Height="48" CornerRadius="10" Background="#E5E5EA">
+                                            <Border CornerRadius="10">
                                                 <Border.Background>
                                                     <ImageBrush ImageSource="{Binding Cover}" Stretch="UniformToFill"/>
                                                 </Border.Background>
@@ -256,8 +252,8 @@
                                             <DockPanel>
                                                 <!-- 선택 안 됨: 주황 테두리 / 선택됨: 파랑 / 정리됨: 초록 -->
                                                 <Border x:Name="StateBadge" DockPanel.Dock="Right" Style="{StaticResource Badge}" Padding="6,1"
-                                                        VerticalAlignment="Center" Background="#FFF7ED" BorderBrush="#FDBA74" BorderThickness="1">
-                                                    <TextBlock x:Name="StateText" Text="{Binding StateLabel}" FontSize="11" FontWeight="SemiBold" Foreground="#C2410C"/>
+                                                        VerticalAlignment="Center" Background="#FFF3E0" BorderBrush="Transparent" BorderThickness="0">
+                                                    <TextBlock x:Name="StateText" Text="{Binding StateLabel}" FontSize="11" FontWeight="SemiBold" Foreground="#9C5700"/>
                                                 </Border>
                                                 <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                             </DockPanel>
@@ -272,9 +268,9 @@
                                             <Setter TargetName="StateText" Property="Foreground" Value="White"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding State}" Value="Cleaned">
-                                            <Setter TargetName="StateBadge" Property="Background" Value="#DCFCE7"/>
-                                            <Setter TargetName="StateBadge" Property="BorderBrush" Value="#DCFCE7"/>
-                                            <Setter TargetName="StateText" Property="Foreground" Value="#15803D"/>
+                                            <Setter TargetName="StateBadge" Property="Background" Value="#E5F6E9"/>
+                                            <Setter TargetName="StateBadge" Property="BorderBrush" Value="#E5F6E9"/>
+                                            <Setter TargetName="StateText" Property="Foreground" Value="#1B7430"/>
                                             <Setter TargetName="Root" Property="Opacity" Value="0.55"/>
                                         </DataTrigger>
                                     </DataTemplate.Triggers>
@@ -285,13 +281,13 @@
                 </Border>
 
                 <!-- 오른쪽: 크게 보기 + 사진 띠 -->
-                <Grid Grid.Column="1">
+                <Grid Grid.Column="1" Margin="14,14,14,0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <Border x:Name="PreviewHost" Background="{StaticResource StageBrush}" ClipToBounds="True"
+                    <Border x:Name="PreviewHost" Background="{StaticResource StageBrush}" ClipToBounds="True" CornerRadius="22"
                             MouseWheel="Preview_MouseWheel" MouseLeftButtonDown="Preview_MouseLeftButtonDown"
                             MouseMove="Preview_MouseMove" MouseLeftButtonUp="Preview_MouseLeftButtonUp"
                             SizeChanged="PreviewHost_SizeChanged">
@@ -302,21 +298,21 @@
 
                             <!-- 위쪽 정보 -->
                             <DockPanel x:Name="PreviewTopBar" VerticalAlignment="Top" Margin="16,14,16,0" LastChildFill="False">
-                                <Border DockPanel.Dock="Left" Background="#99000000" CornerRadius="6" Padding="10,5">
+                                <Border DockPanel.Dock="Left" Background="#663A3A3C" CornerRadius="10" Padding="10,5">
                                     <TextBlock x:Name="PreviewCounter" Foreground="White" FontWeight="SemiBold"/>
                                 </Border>
-                                <Border x:Name="PreviewRecommended" DockPanel.Dock="Left" Margin="8,0,0,0" Background="#F59E0B"
-                                        CornerRadius="6" Padding="10,5" Visibility="Collapsed"
+                                <Border x:Name="PreviewRecommended" DockPanel.Dock="Left" Margin="8,0,0,0" Background="#A66A00"
+                                        CornerRadius="10" Padding="10,5" Visibility="Collapsed"
                                         ToolTip="이 묶음에서 가장 선명하고 해상도가 높은 사진">
                                     <TextBlock Text="★ 추천" Foreground="White" FontWeight="SemiBold"/>
                                 </Border>
-                                <Border x:Name="PreviewState" DockPanel.Dock="Right" CornerRadius="6" Padding="12,5" Background="{StaticResource KeepBrush}"
+                                <Border x:Name="PreviewState" DockPanel.Dock="Right" CornerRadius="10" Padding="12,5" Background="{StaticResource KeepBrush}"
                                         Cursor="Hand" MouseLeftButtonDown="PreviewState_MouseLeftButtonDown"
                                         ToolTip="눌러서 이 사진을 남길 사진에 더하거나 뺍니다 (Space)">
                                     <TextBlock x:Name="PreviewStateText" Foreground="White" FontWeight="Bold"/>
                                 </Border>
-                                <Border x:Name="ZoomBadge" DockPanel.Dock="Right" Margin="0,0,8,0" Background="#99000000"
-                                        CornerRadius="6" Padding="10,5" Visibility="Collapsed">
+                                <Border x:Name="ZoomBadge" DockPanel.Dock="Right" Margin="0,0,8,0" Background="#663A3A3C"
+                                        CornerRadius="10" Padding="10,5" Visibility="Collapsed">
                                     <TextBlock x:Name="ZoomText" Foreground="White"/>
                                 </Border>
                             </DockPanel>
@@ -337,8 +333,8 @@
                     </Border>
 
                     <!-- 사진 띠 -->
-                    <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0">
-                        <ListBox x:Name="FilmStrip" Height="250" BorderThickness="0" Background="Transparent" Focusable="False"
+                    <Border Grid.Row="1" Margin="0,12,0,10" CornerRadius="18" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1">
+                        <ListBox x:Name="FilmStrip" Height="244" BorderThickness="0" Background="Transparent" Focusable="False"
                                  Padding="8,0" ItemContainerStyle="{StaticResource PlainItem}"
                                  ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                  ScrollViewer.CanContentScroll="False" PreviewMouseWheel="FilmStrip_PreviewMouseWheel">
@@ -349,27 +345,27 @@
                             </ListBox.ItemsPanel>
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
-                                    <Border x:Name="FocusRing" Margin="4,10" Padding="3" CornerRadius="13" BorderThickness="2"
+                                    <Border x:Name="FocusRing" Margin="4,10" Padding="3" CornerRadius="17" BorderThickness="2"
                                             BorderBrush="Transparent" Cursor="Hand" Background="Transparent"
                                             MouseLeftButtonDown="Card_MouseLeftButtonDown">
-                                        <Border x:Name="Card" Width="176" CornerRadius="10" BorderThickness="3"
-                                                BorderBrush="Transparent" Background="#F9FAFB">
+                                        <Border x:Name="Card" Width="176" CornerRadius="14" BorderThickness="2"
+                                                BorderBrush="Transparent" Background="#F2F2F7">
                                             <StackPanel>
-                                                <Grid Height="114">
-                                                    <Border CornerRadius="7,7,0,0" Background="#E5E7EB">
-                                                        <Border CornerRadius="7,7,0,0">
+                                                <Grid x:Name="ThumbnailArea" Height="114">
+                                                    <Border CornerRadius="12,12,0,0" Background="#E5E5EA">
+                                                        <Border CornerRadius="12,12,0,0">
                                                             <Border.Background>
                                                                 <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill"/>
                                                             </Border.Background>
                                                         </Border>
                                                     </Border>
-                                                    <Border x:Name="Dim" CornerRadius="7,7,0,0" Background="#8CFFFFFF" Visibility="Collapsed"/>
+                                                    <Border x:Name="Dim" CornerRadius="12,12,0,0" Background="#26FFFFFF" Visibility="Collapsed"/>
                                                     <Border x:Name="StateBadge" Style="{StaticResource Badge}" Margin="6"
                                                             HorizontalAlignment="Left" Background="{StaticResource KeepBrush}">
                                                         <TextBlock Text="{Binding StateText}" Foreground="White" FontSize="11" FontWeight="Bold"/>
                                                     </Border>
                                                     <Border x:Name="RecommendBadge" Style="{StaticResource Badge}" Margin="6"
-                                                            HorizontalAlignment="Right" Background="#F59E0B" Visibility="Collapsed">
+                                                            HorizontalAlignment="Right" Background="#A66A00" Visibility="Collapsed">
                                                         <TextBlock Text="★ 추천" Foreground="White" FontSize="11" FontWeight="Bold"/>
                                                     </Border>
                                                     <Button x:Name="KeepToggle" Style="{StaticResource KeepToggleButton}" Margin="6"
@@ -381,9 +377,9 @@
                                                     <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
                                                                ToolTip="{Binding Info.Path}"/>
                                                     <TextBlock Text="{Binding DetailText}" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,2,0,0"/>
-                                                    <StackPanel Orientation="Horizontal" Margin="0,5,0,0" ToolTip="묶음 안에서 가장 선명한 사진과 비교한 선명도">
+                                                    <StackPanel x:Name="SharpnessRow" Orientation="Horizontal" Margin="0,5,0,0" ToolTip="묶음 안에서 가장 선명한 사진과 비교한 선명도">
                                                         <TextBlock Text="선명도" Foreground="{StaticResource MutedBrush}" FontSize="10" Width="38"/>
-                                                        <Border x:Name="SharpBar" Width="104" Height="5" CornerRadius="2.5" Background="#E5E7EB" VerticalAlignment="Center">
+                                                        <Border x:Name="SharpBar" Width="104" Height="5" CornerRadius="2.5" Background="#E5E5EA" VerticalAlignment="Center">
                                                             <Border HorizontalAlignment="Left" Width="{Binding SharpnessBarWidth}" CornerRadius="2.5"
                                                                     Background="{StaticResource PrimaryBrush}"/>
                                                         </Border>
@@ -392,9 +388,9 @@
                                                     </StackPanel>
                                                     <StackPanel x:Name="CompRow" Orientation="Horizontal" Margin="0,4,0,0" ToolTip="{Binding CompositionTip}">
                                                         <TextBlock Text="구도" Foreground="{StaticResource MutedBrush}" FontSize="10" Width="38"/>
-                                                        <Border Width="104" Height="5" CornerRadius="2.5" Background="#E5E7EB" VerticalAlignment="Center">
+                                                        <Border Width="104" Height="5" CornerRadius="2.5" Background="#E5E5EA" VerticalAlignment="Center">
                                                             <Border HorizontalAlignment="Left" Width="{Binding CompositionBarWidth}" CornerRadius="2.5"
-                                                                    Background="#8B5CF6"/>
+                                                                    Background="#AF52DE"/>
                                                         </Border>
                                                     </StackPanel>
                                                 </StackPanel>
@@ -402,6 +398,11 @@
                                         </Border>
                                     </Border>
                                     <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="Compact">
+                                            <Setter TargetName="ThumbnailArea" Property="Height" Value="76"/>
+                                            <Setter TargetName="SharpnessRow" Property="Visibility" Value="Collapsed"/>
+                                            <Setter TargetName="CompRow" Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
                                         <DataTrigger Binding="{Binding IsKept}" Value="True">
                                             <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource KeepBrush}"/>
                                             <Setter TargetName="KeepToggle" Property="Background" Value="{StaticResource KeepBrush}"/>
@@ -420,7 +421,7 @@
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsRemoved}" Value="True">
                                             <Setter TargetName="Card" Property="Opacity" Value="0.4"/>
-                                            <Setter TargetName="StateBadge" Property="Background" Value="#6B7280"/>
+                                            <Setter TargetName="StateBadge" Property="Background" Value="#636366"/>
                                             <Setter TargetName="KeepToggle" Property="Visibility" Value="Collapsed"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding HasSharpness}" Value="False">
@@ -438,15 +439,15 @@
 
             <!-- 처음 화면 -->
             <Grid x:Name="WelcomeOverlay" Background="{StaticResource BgBrush}">
-                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="16" Padding="44,38" MaxWidth="620"
+                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="28" Padding="36,24" MaxWidth="620" Margin="24"
                         HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="{StaticResource LineBrush}" BorderThickness="1">
                     <StackPanel>
                         <TextBlock Text="&#xE91B;" FontFamily="{StaticResource IconFont}" FontSize="44"
                                    Foreground="{StaticResource PrimaryBrush}" HorizontalAlignment="Center"/>
-                        <TextBlock Text="비슷한 사진 정리기" FontSize="24" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,14,0,6"/>
-                        <TextBlock Text="같은 장소·같은 구도로 여러 번 찍은 사진을 자동으로 묶어 보여 드려요.&#x0a;마음에 드는 사진만 고르면 나머지는 정리됩니다."
+                        <TextBlock Text="좋은 순간만 남겨보세요" FontSize="28" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,14,0,6"/>
+                        <TextBlock Text="비슷한 사진은 한곳에 모으고, 마음에 드는 사진만 간직하세요.&#x0a;폴더를 이곳에 끌어다 놓아도 시작할 수 있어요."
                                    Foreground="{StaticResource MutedBrush}" TextAlignment="Center" TextWrapping="Wrap" LineHeight="21"/>
-                        <Grid Margin="0,26,0,26">
+                        <Grid Margin="0,18,0,18">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition/>
                                 <ColumnDefinition/>
@@ -480,14 +481,14 @@
             </Grid>
 
             <!-- 진행 상황 -->
-            <Grid x:Name="ProgressOverlay" Background="#E6F3F4F6" Visibility="Collapsed">
-                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="16" Padding="36,30" Width="460"
+            <Grid x:Name="ProgressOverlay" Background="#E6F2F2F7" Visibility="Collapsed">
+                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="24" Padding="32,28" Width="460"
                         HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="{StaticResource LineBrush}" BorderThickness="1">
                     <StackPanel>
                         <TextBlock x:Name="ProgressTitle" Text="사진 분석 중..." FontSize="18" FontWeight="Bold"/>
                         <TextBlock x:Name="ProgressDetail" Foreground="{StaticResource MutedBrush}" Margin="0,6,0,16"/>
                         <ProgressBar x:Name="ProgressBar" Height="8" Maximum="1" Foreground="{StaticResource PrimaryBrush}"
-                                     Background="#E5E7EB" BorderThickness="0"/>
+                                     Background="#E5E5EA" BorderThickness="0"/>
                         <Button Style="{StaticResource SecondaryButton}" HorizontalAlignment="Right" Margin="0,18,0,0"
                                 Content="중지" Click="CancelScan_Click"/>
                     </StackPanel>
@@ -495,8 +496,8 @@
             </Grid>
 
             <!-- 안내 메시지 -->
-            <Grid x:Name="InfoOverlay" Background="#B3111827" Visibility="Collapsed">
-                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="16" Padding="36,30" MaxWidth="520"
+            <Grid x:Name="InfoOverlay" Background="#661C1C1E" Visibility="Collapsed">
+                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="24" Padding="32,28" MaxWidth="520"
                         HorizontalAlignment="Center" VerticalAlignment="Center">
                     <StackPanel>
                         <TextBlock x:Name="InfoTitle" FontSize="20" FontWeight="Bold" TextWrapping="Wrap"/>

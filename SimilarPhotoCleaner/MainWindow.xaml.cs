@@ -321,7 +321,7 @@ public partial class MainWindow : Window
     private void ApplyFolderPaneVisibility()
     {
         bool show = _settings.ShowFolderPane;
-        FolderColumn.Width = show ? new GridLength(250) : new GridLength(0);
+        FolderColumn.Width = show ? new GridLength(224) : new GridLength(0);
         FolderPane.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -1494,7 +1494,24 @@ public partial class MainWindow : Window
         PreviewHost.ReleaseMouseCapture();
     }
 
-    private void PreviewHost_SizeChanged(object sender, SizeChangedEventArgs e) => ClampPan();
+    private void PreviewHost_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // Border.ClipToBounds alone is rectangular; also clip zoomed photos to the rounded panel.
+        PreviewHost.Clip = new RectangleGeometry(new Rect(e.NewSize), 22, 22);
+        ClampPan();
+    }
+
+    // Keep the comparison photo usable on short laptop displays. The full scores return
+    // automatically when the window has enough height for the expanded photo cards.
+    private void UpdateAdaptiveLayout(double height)
+    {
+        if (FilmStrip == null) return;
+        bool compact = height < 740;
+        FilmStrip.Height = compact ? 166 : 244;
+        FilmStrip.Tag = compact ? "Compact" : null;
+    }
+
+    private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateAdaptiveLayout(e.NewSize.Height);
 
     private void Window_DragOver(object sender, DragEventArgs e)
     {
