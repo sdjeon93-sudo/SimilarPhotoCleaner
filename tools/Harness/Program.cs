@@ -16,6 +16,8 @@ var thread = new Thread(() =>
         case "bench": Bench(args[1]); break;
         case "thumbtest": ThumbTest(args[1]); break;
         case "scaling": Scaling(args[1]); break;
+        case "tilt": TiltTest(args[1]); break;
+        case "quick": QuickTest(args[1]); break;
         default: Test(args[1]); break;
     }
 });
@@ -49,6 +51,75 @@ static void GenerateBig(string outDir)
             ExifThumb(image, wide));
     }
     Console.WriteLine($"generated {n}");
+}
+
+// 기울기 측정 시험: 배경화면을 0~4° 돌려(빈 모서리가 안 보이게 확대) 저장하고 2차 분석으로 잰 기울기를 보여 준다.
+static void TiltTest(string outDir)
+{
+    Directory.CreateDirectory(outDir);
+    var bases = Directory.GetFiles(@"C:\Windows\Web\Wallpaper", "*.jpg", SearchOption.AllDirectories).OrderBy(f => f).ToList();
+    double[] angles = [0, 1, 2.5, 4];
+    var errors = new List<double>();
+    int confident = 0, total = 0;
+    foreach (var path in bases)
+    {
+        var src = LoadScaled(path, 1600);
+        int w = src.PixelWidth, h = src.PixelHeight;
+        var line = new List<string>();
+        foreach (double a in angles)
+        {
+            var dv = new DrawingVisual();
+            RenderOptions.SetBitmapScalingMode(dv, BitmapScalingMode.HighQuality);
+            using (var dc = dv.RenderOpen())
+            {
+                dc.PushTransform(new RotateTransform(a, w / 2.0, h / 2.0));
+                dc.PushTransform(new ScaleTransform(1.15, 1.15, w / 2.0, h / 2.0));
+                dc.DrawImage(src, new Rect(0, 0, w, h));
+            }
+            var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+            rtb.Render(dv);
+            string file = Path.Combine(outDir, $"{Path.GetFileNameWithoutExtension(path)}_{a:0.0}.jpg");
+            var enc = new JpegBitmapEncoder { QualityLevel = 90 };
+            enc.Frames.Add(BitmapFrame.Create(rtb));
+            using (var fs = File.Create(file)) enc.Save(fs);
+
+            var d = PhotoAnalyzer.AnalyzeDetail(file);
+            line.Add($"{a:0.0}°→{d.Tilt:0.0}°({d.TiltConfidence:0.00})");
+            total++;
+            if (d.TiltConfidence >= 0.3f) { confident++; errors.Add(Math.Abs(d.Tilt - a)); }
+        }
+        Console.WriteLine($"  {Path.GetFileName(path),-24} {string.Join("  ", line)}");
+    }
+    Console.WriteLine($"믿음 0.3 이상: {confident}/{total}장, 그중 오차 평균 {errors.DefaultIfEmpty(0).Average():0.00}° 최대 {errors.DefaultIfEmpty(0).Max():0.00}°");
+}
+
+// 빠르게 정리하기 시험: 기본 단계로 묶고 2차 분석까지 한 뒤, 묶음마다 남길 사진을 점수와 함께 보여 준다.
+// gen으로 만든 사진이면 남긴 사진 중 흐림·기울임·사람 변형이 몇 장인지 센다.
+static void QuickTest(string dir)
+{
+    var photos = Directory.GetFiles(dir, "*.jpg").OrderBy(f => f).Select(f => PhotoAnalyzer.Analyze(new FileInfo(f))).ToList();
+    var bad = new Dictionary<string, int>();
+    int kept = 0;
+    foreach (var members in Grouper.Group(photos, 3).Select(g => g.Select(i => photos[i]).ToList()))
+    {
+        foreach (var p in members.Where(p => !p.IsDetailed))
+        {
+            var d = PhotoAnalyzer.AnalyzeDetail(p.Path);
+            (p.Sharpness, p.Tilt, p.TiltConfidence, p.IsDetailed) = (d.Sharpness, d.Tilt, d.TiltConfidence, true);
+        }
+        var group = new SimilarPhotoCleaner.ViewModels.PhotoGroupView(0, members, dir);
+        var keep = group.QuickPick();
+        Console.WriteLine($"묶음 {members.Count}장 → {keep.Count}장 남김");
+        foreach (var c in group.Cards.OrderByDescending(c => c.Quality))
+        {
+            string variant = c.FileName.Contains("__") ? c.FileName.Split("__")[1].Replace(".jpg", "") : "";
+            Console.WriteLine($"  {(keep.Contains(c) ? "남김" : "    ")} {c.FileName,-22} 점수 {c.Quality:0.00}  선명 {c.SharpnessRatio:0.00}  구도 {c.Composition:0.00}  기울기 {c.Info.Tilt:0.0}°({c.Info.TiltConfidence:0.00})");
+            if (!keep.Contains(c)) continue;
+            kept++;
+            if (variant is "blur" or "tilt" or "person" or "pan") bad[variant] = bad.GetValueOrDefault(variant) + 1;
+        }
+    }
+    Console.WriteLine($"남긴 사진 {kept}장 중 흐림 {bad.GetValueOrDefault("blur")} · 기울임 {bad.GetValueOrDefault("tilt")} · 사람 {bad.GetValueOrDefault("person")} · 이동+사람 {bad.GetValueOrDefault("pan")}");
 }
 
 // 빠른 분석을 스레드 수별로 돌려 본다(두 번째 바퀴 시간 = JIT 제외).

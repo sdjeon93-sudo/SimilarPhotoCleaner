@@ -208,6 +208,14 @@
                             <StackPanel>
                                 <TextBlock x:Name="BatchText" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource MutedBrush}"
                                            Text="묶음마다 남길 사진을 고른 뒤, 여기서 한꺼번에 정리해요."/>
+                                <Button x:Name="QuickButton" Style="{StaticResource PrimaryButton}" Margin="0,10,0,0" Padding="12,9"
+                                        Click="QuickClean_Click"
+                                        ToolTip="'선택 안 됨' 묶음마다 선명도와 구도가 좋은 사진을 골라 남기고 나머지를 정리합니다.&#x0a;4장 이상인 묶음은 2~3장(7장 이상이면 3장), 2~3장인 묶음은 1장을 남겨요.&#x0a;이미 고른 '선택됨' 묶음은 고른 대로 정리해요.">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE945;"/>
+                                        <TextBlock Text="빠르게 정리하기"/>
+                                    </StackPanel>
+                                </Button>
                                 <Button x:Name="BatchButton" Style="{StaticResource SuccessButton}" Margin="0,10,0,0" Padding="12,9"
                                         Click="ApplySelected_Click" ToolTip="'선택됨' 묶음의 고르지 않은 사진을 정리합니다 (Ctrl+Enter)">
                                     <StackPanel Orientation="Horizontal">
@@ -382,6 +390,13 @@
                                                         <TextBlock x:Name="SharpPending" Text="계산 중…" Foreground="{StaticResource MutedBrush}"
                                                                    FontSize="10" Visibility="Collapsed"/>
                                                     </StackPanel>
+                                                    <StackPanel x:Name="CompRow" Orientation="Horizontal" Margin="0,4,0,0" ToolTip="{Binding CompositionTip}">
+                                                        <TextBlock Text="구도" Foreground="{StaticResource MutedBrush}" FontSize="10" Width="38"/>
+                                                        <Border Width="104" Height="5" CornerRadius="2.5" Background="#E5E7EB" VerticalAlignment="Center">
+                                                            <Border HorizontalAlignment="Left" Width="{Binding CompositionBarWidth}" CornerRadius="2.5"
+                                                                    Background="#8B5CF6"/>
+                                                        </Border>
+                                                    </StackPanel>
                                                 </StackPanel>
                                             </StackPanel>
                                         </Border>
@@ -411,6 +426,7 @@
                                         <DataTrigger Binding="{Binding HasSharpness}" Value="False">
                                             <Setter TargetName="SharpBar" Property="Visibility" Value="Collapsed"/>
                                             <Setter TargetName="SharpPending" Property="Visibility" Value="Visible"/>
+                                            <Setter TargetName="CompRow" Property="Visibility" Value="Collapsed"/>
                                         </DataTrigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>

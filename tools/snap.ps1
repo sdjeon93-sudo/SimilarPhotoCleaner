@@ -6,10 +6,13 @@ using System;
 using System.Runtime.InteropServices;
 public static class Snap {
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdc, uint flags);
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
 }
 "@
+# 배율이 100%가 아닌 화면에서 창 크기를 실제 픽셀로 받아야 그림이 잘리지 않는다.
+[Snap]::SetProcessDPIAware() | Out-Null
 $h = (Get-Process -Id $ProcessId).MainWindowHandle
 $r = New-Object Snap+RECT
 [Snap]::GetWindowRect($h, [ref]$r) | Out-Null

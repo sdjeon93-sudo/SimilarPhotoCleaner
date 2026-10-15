@@ -58,6 +58,9 @@ public partial class MainWindow : Window
     public MainWindow(string? startFolder)
     {
         InitializeComponent();
+        // 노트북(1920×1080, 배율 125%)처럼 화면이 창보다 작으면 아래쪽 정리 버튼이 화면 밖으로 나가지 않게 줄인다.
+        Width = Math.Min(Width, SystemParameters.WorkArea.Width);
+        Height = Math.Min(Height, SystemParameters.WorkArea.Height);
         GroupList.ItemsSource = _groups;
         FolderTree.ItemsSource = _folderRoots;
         PreviewImage.RenderTransform = new TransformGroup { Children = { _zoom, _pan } };
@@ -611,7 +614,7 @@ public partial class MainWindow : Window
                 continue;
             }
 
-            (double Sharpness, byte[] Thumbnail)? result = null;
+            PhotoAnalyzer.Detail? result = null;
             try { result = PhotoAnalyzer.AnalyzeDetail(next.Path); }
             catch { /* 읽지 못하면 내장 썸네일 결과를 그대로 쓴다 */ }
             if (token.IsCancellationRequested) return;
@@ -620,10 +623,17 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ApplyDetail(PhotoInfo photo, (double Sharpness, byte[] Thumbnail)? result, CancellationToken token)
+    private void ApplyDetail(PhotoInfo photo, PhotoAnalyzer.Detail? result, CancellationToken token)
     {
-        if (token.IsCancellationRequested || result is not { } r) return; // 실패하면 DetailInProgress로 남겨 다시 시도하지 않는다
+        if (token.IsCancellationRequested) return;
+        if (result is not { } r)
+        {
+            photo.DetailFailed = true; // DetailInProgress로 남겨 다시 시도하지 않는다
+            return;
+        }
         photo.Sharpness = r.Sharpness;
+        photo.Tilt = r.Tilt;
+        photo.TiltConfidence = r.TiltConfidence;
         photo.ThumbnailJpeg = r.Thumbnail;
         photo.IsDetailed = true;
         photo.DetailInProgress = false;
@@ -903,6 +913,85 @@ public partial class MainWindow : Window
         return true;
     }
 
+    private CancellationTokenSource? _quickCts;
+
+    /// <summary>
+    /// 빠르게 정리하기: '선택 안 됨' 묶음마다 선명도·구도 점수가 높은 사진을 골라 남기고
+    /// (2~3장 묶음은 1장, 4장 이상은 2~3장), '선택됨' 묶음과 함께 한꺼번에 정리한다.
+    /// </summary>
+    private async Task QuickCleanAsync()
+    {
+        if (_root == null || _quickCts != null) return;
+        var targets = _groups.Where(g => g.State == GroupState.Undecided).ToList();
+        if (targets.Count == 0 && !_groups.Any(g => g.State == GroupState.Selected))
+        {
+            FlashHint("정리할 묶음이 없어요.", error: false);
+            return;
+        }
+        if (!await WaitForDetailsAsync(targets)) return;
+
+        var picks = targets.ToDictionary(g => g, g => g.QuickPick());
+        var selected = _groups.Where(g => g.State == GroupState.Selected).ToList();
+        var items = targets.SelectMany(g => g.AliveCards.Where(c => !picks[g].Contains(c)))
+            .Concat(selected.SelectMany(g => g.CardsToRemove)).ToList();
+
+        var lines = new List<string>();
+        if (targets.Count > 0)
+            lines.Add($"'선택 안 됨' 묶음 {targets.Count}개에서 선명도와 구도가 좋은 사진을 골라 남겨요.\n" +
+                      "    2~3장인 묶음은 1장, 4~6장은 2장, 7장 이상은 3장을 남겨요.");
+        if (selected.Count > 0)
+            lines.Add($"이미 고른 '선택됨' 묶음 {selected.Count}개는 고른 대로 정리해요.");
+        lines.Add($"모두 사진 {items.Count}장({Format.Size(items.Sum(c => c.Info.FileSize))})을 {RemoveWhereText}.");
+        var answer = MessageBox.Show(this,
+            string.Join("\n", lines) + "\n\n예: 바로 정리하기\n아니요: 골라 두기만 하고 직접 확인하기\n취소: 돌아가기",
+            "빠르게 정리하기", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        if (answer is not (MessageBoxResult.Yes or MessageBoxResult.No)) return;
+
+        foreach (var (group, keep) in picks) group.ApplyPick(keep);
+        if (answer == MessageBoxResult.No)
+        {
+            ShowGroup(targets.FirstOrDefault() ?? _current ?? _groups[0]);
+            FlashHint("자동으로 골라 '선택됨'으로 두었어요. 묶음을 눌러 확인한 뒤 '선택한 묶음 정리하기'를 누르세요.", error: false);
+            return;
+        }
+        if (_current != null) ShowGroup(_current);
+        ApplySelected(confirm: false);
+    }
+
+    /// <summary>묶음의 모든 사진에 선명도·기울기가 나올 때까지 진행 창을 띄우고 기다린다. 중지하면 false.</summary>
+    private async Task<bool> WaitForDetailsAsync(List<PhotoGroupView> groups)
+    {
+        static bool Pending(PhotoCard c) => !c.Info.IsDetailed && !c.Info.DetailFailed;
+        var cards = groups.SelectMany(g => g.AliveCards).ToList();
+        if (!cards.Any(Pending)) return true;
+
+        var cts = _quickCts = new CancellationTokenSource();
+        ProgressTitle.Text = "선명도와 구도를 계산하는 중...";
+        ProgressBar.IsIndeterminate = false;
+        ProgressOverlay.Visibility = Visibility.Visible;
+        RebuildDetailQueue();
+        try
+        {
+            while (true)
+            {
+                int left = cards.Count(Pending);
+                ProgressBar.Value = 1 - (double)left / cards.Count;
+                ProgressDetail.Text = $"묶인 사진 {cards.Count - left:N0} / {cards.Count:N0}장";
+                if (left == 0) return true;
+                await Task.Delay(200, cts.Token);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        finally
+        {
+            ProgressOverlay.Visibility = Visibility.Collapsed;
+            _quickCts = null;
+        }
+    }
+
     private void Undo()
     {
         if (_undo.Count == 0 || _root == null) return;
@@ -1035,6 +1124,7 @@ public partial class MainWindow : Window
         var selected = _groups.Where(g => g.State == GroupState.Selected).ToList();
         var items = selected.SelectMany(g => g.CardsToRemove).ToList();
         BatchPanel.IsEnabled = _groups.Count > 0;
+        QuickButton.IsEnabled = _groups.Any(g => g.State != GroupState.Cleaned);
         BatchButton.IsEnabled = selected.Count > 0;
         BatchButtonText.Text = selected.Count == 0 ? "선택한 묶음 정리하기" : $"선택한 묶음 {selected.Count}개 정리하기";
         BatchText.Text = selected.Count == 0
@@ -1180,7 +1270,7 @@ public partial class MainWindow : Window
         bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
         if (ProgressOverlay.Visibility == Visibility.Visible)
         {
-            if (e.Key == Key.Escape) _scanCts?.Cancel();
+            if (e.Key == Key.Escape) CancelProgress();
             e.Handled = true;
             return;
         }
@@ -1269,7 +1359,16 @@ public partial class MainWindow : Window
         });
     }
 
-    private void CancelScan_Click(object sender, RoutedEventArgs e) => _scanCts?.Cancel();
+    private void CancelScan_Click(object sender, RoutedEventArgs e) => CancelProgress();
+
+    /// <summary>진행 창의 중지: 빠르게 정리하기를 기다리는 중이면 그것만, 아니면 폴더 검사를 멈춘다.</summary>
+    private void CancelProgress()
+    {
+        if (_quickCts != null) _quickCts.Cancel();
+        else _scanCts?.Cancel();
+    }
+
+    private async void QuickClean_Click(object sender, RoutedEventArgs e) => await QuickCleanAsync();
 
     private void Select_Click(object sender, RoutedEventArgs e) => SelectCurrent();
     private void Defer_Click(object sender, RoutedEventArgs e) => Defer();

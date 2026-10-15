@@ -11,7 +11,12 @@ namespace SimilarPhotoCleaner.Core;
 public sealed class AnalysisCache
 {
     /// <summary>분석 방식이 바뀌면 올려서 예전 결과를 버린다.</summary>
-    private const int FormatVersion = 1;
+    private const int FormatVersion = 2;
+    /// <summary>
+    /// 1에는 기울기가 없다. 묶기에 쓰는 특징(지문·색)은 그대로라서 버리지 않고 읽되,
+    /// 2차 분석만 다시 하게 한다(구글 드라이브·휴대폰에서 1차 분석을 다시 하지 않도록).
+    /// </summary>
+    private const int NoTiltVersion = 1;
     private static readonly TimeSpan KeepUnused = TimeSpan.FromDays(90);
 
     private readonly string _dir = Path.Combine(
@@ -127,7 +132,9 @@ public sealed class AnalysisCache
         string file = FileFor(folder.Path);
         if (!File.Exists(file)) return;
         using var r = new BinaryReader(File.OpenRead(file), Encoding.UTF8);
-        if (r.ReadInt32() != FormatVersion) return;
+        int version = r.ReadInt32();
+        if (version != FormatVersion && version != NoTiltVersion) return;
+        bool hasTilt = version >= 2;
         if (!string.Equals(r.ReadString(), folder.Path, StringComparison.OrdinalIgnoreCase)) return;
         int count = r.ReadInt32();
         for (int i = 0; i < count; i++)
@@ -142,7 +149,9 @@ public sealed class AnalysisCache
             for (int k = 0; k < hist.Length; k++) hist[k] = r.ReadSingle();
             bool detailed = r.ReadBoolean();
             double sharpness = r.ReadDouble();
+            float tilt = hasTilt ? r.ReadSingle() : 0, tiltConfidence = hasTilt ? r.ReadSingle() : 0;
             var thumb = r.ReadBytes(r.ReadInt32());
+            if (!hasTilt) detailed = false; // 기울기를 구하도록 2차 분석을 다시 한다
             folder.Items[name] = new PhotoInfo
             {
                 Path = Path.Combine(folder.Path, name),
@@ -156,6 +165,8 @@ public sealed class AnalysisCache
                 ColorHistogram = hist,
                 IsDetailed = detailed,
                 Sharpness = sharpness,
+                Tilt = tilt,
+                TiltConfidence = tiltConfidence,
                 ThumbnailJpeg = thumb,
             };
         }
@@ -185,6 +196,8 @@ public sealed class AnalysisCache
                 foreach (float v in p.ColorHistogram) w.Write(v);
                 w.Write(p.IsDetailed);
                 w.Write(p.Sharpness);
+                w.Write(p.Tilt);
+                w.Write(p.TiltConfidence);
                 var thumb = p.ThumbnailJpeg;
                 w.Write(thumb.Length);
                 w.Write(thumb);

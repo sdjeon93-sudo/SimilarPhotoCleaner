@@ -62,6 +62,29 @@ public sealed class PhotoCard(PhotoInfo info, string root) : ObservableObject
     public bool HasSharpness => SharpnessRatio >= 0;
     public double SharpnessBarWidth => Math.Max(4, SharpnessRatio * SharpnessBarMax);
 
+    private double _composition = -1;
+
+    /// <summary>구도 점수(0~1): 수평이 맞는지 + 묶음의 다른 사진들과 구도가 얼마나 비슷한지. 아직 원본을 분석하지 않았으면 -1</summary>
+    public double Composition
+    {
+        get => _composition;
+        set
+        {
+            if (!Set(ref _composition, value)) return;
+            Notify(nameof(CompositionBarWidth));
+            Notify(nameof(CompositionTip));
+        }
+    }
+
+    public double CompositionBarWidth => Math.Max(4, Composition * SharpnessBarMax);
+
+    public string CompositionTip => Info.TiltConfidence >= 0.3f
+        ? $"구도 점수: 수평이 맞는지와 묶음의 다른 사진과 비슷한 구도인지로 매겨요. 이 사진은 약 {Info.Tilt:0.0}° 기울었어요."
+        : "구도 점수: 수평이 맞는지와 묶음의 다른 사진과 비슷한 구도인지로 매겨요. 이 사진은 곧은 선이 뚜렷하지 않아 기울기는 따지지 않았어요.";
+
+    /// <summary>빠르게 정리하기에서 남길 사진을 고르는 점수(선명도·구도·해상도). 묶음 안에서만 비교한다.</summary>
+    public double Quality { get; set; }
+
     /// <summary>원본 분석으로 더 선명한 썸네일이 생겼을 때 다시 그리게 한다.</summary>
     public void RefreshThumbnail()
     {

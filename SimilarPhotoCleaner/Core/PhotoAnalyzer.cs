@@ -40,11 +40,15 @@ public static class PhotoAnalyzer
         return Build(file, ImageLoader.LoadPixels(bytes, AnalysisMinSide), detailed: true);
     }
 
-    /// <summary>2차 분석: 원본을 읽어 선명도와 선명한 썸네일을 만든다. 묶음에 든 사진에만 쓴다.</summary>
-    public static (double Sharpness, byte[] Thumbnail) AnalyzeDetail(string path)
+    public readonly record struct Detail(double Sharpness, float Tilt, float TiltConfidence, byte[] Thumbnail);
+
+    /// <summary>2차 분석: 원본을 읽어 선명도·기울기와 선명한 썸네일을 만든다. 묶음에 든 사진에만 쓴다.</summary>
+    public static Detail AnalyzeDetail(string path)
     {
         var px = ImageLoader.LoadPixels(File.ReadAllBytes(path), AnalysisMinSide);
-        return (Sharpness(ToGray(px), px.Width, px.Height), MakeThumbnail(px));
+        var gray = ToGray(px);
+        var (tilt, confidence) = Tilt(gray, px.Width, px.Height);
+        return new Detail(Sharpness(gray, px.Width, px.Height), tilt, confidence, MakeThumbnail(px));
     }
 
     private static byte[] ReadHead(string path, int size)
@@ -66,6 +70,7 @@ public static class PhotoAnalyzer
         var gray = ToGray(px);
 
         // 조금 당겨 찍은 사진과도 비교할 수 있도록 가운데 80% 영역의 지문도 만든다.
+        var (tilt, tiltConfidence) = detailed ? Tilt(gray, px.Width, px.Height) : (0f, 0f);
         int cw = Math.Max(1, px.Width * 4 / 5), ch = Math.Max(1, px.Height * 4 / 5);
         var center = new float[cw * ch];
         for (int y = 0; y < ch; y++)
@@ -84,6 +89,8 @@ public static class PhotoAnalyzer
             ColorHistogram = ColorHistogram(px),
             IsDetailed = detailed,
             Sharpness = detailed ? Sharpness(gray, px.Width, px.Height) : 0,
+            Tilt = tilt,
+            TiltConfidence = tiltConfidence,
             ThumbnailJpeg = MakeThumbnail(px),
         };
     }
@@ -196,10 +203,22 @@ public static class PhotoAnalyzer
         return hist;
     }
 
-    /// <summary>라플라시안 분산. 흔들리거나 초점이 나간 사진일수록 작다.</summary>
+    /// <summary>
+    /// 라플라시안 분산을 밝기 분산으로 나눈 값. 흔들리거나 초점이 나간 사진일수록 작다.
+    /// 나누지 않으면 밝게(대비가 크게) 찍힌 사진이 더 선명하다고 나온다.
+    /// </summary>
     private static double Sharpness(float[] g, int w, int h)
     {
         if (w < 3 || h < 3) return 0;
+        double gSum = 0, gSumSq = 0;
+        foreach (float v in g)
+        {
+            gSum += v;
+            gSumSq += v * v;
+        }
+        double contrast = gSumSq / g.Length - (gSum / g.Length) * (gSum / g.Length);
+        if (contrast < 1) return 0; // 거의 한 가지 색인 사진
+
         double sum = 0, sumSq = 0;
         long n = 0;
         for (int y = 1; y < h - 1; y++)
@@ -212,7 +231,83 @@ public static class PhotoAnalyzer
             n++;
         }
         double mean = sum / n;
-        return sumSq / n - mean * mean;
+        return (sumSq / n - mean * mean) / contrast;
+    }
+
+    private const int TiltBinsPerDegree = 4;
+    /// <summary>이보다 많이 돌아간 선은 원래 비스듬한 물체(지붕·계단 등)로 보고 기울기로 치지 않는다.</summary>
+    private const int TiltSearchDegrees = 8;
+
+    /// <summary>
+    /// 기울기: 강한 가장자리의 방향을 90° 주기로 접어 모은다(가로선과 세로선이 같은 칸에 모임).
+    /// 수평이 맞으면 0° 칸에 몰리고, 사진이 t°만큼 돌아가 있으면 t° 칸에 몰린다.
+    /// 몰린 정도가 약하면(곧은 선이 없는 사진) 믿음 정도를 낮게 돌려준다.
+    /// </summary>
+    private static (float Tilt, float Confidence) Tilt(float[] g, int w, int h)
+    {
+        if (w < 16 || h < 16) return (0, 0);
+        const int bins = 90 * TiltBinsPerDegree;
+        var mag = new float[w * h];
+        var ang = new float[w * h];
+        double sumMag = 0;
+        int count = 0;
+        // 가장자리 2픽셀은 뺀다(테두리·검은 띠의 경계가 선으로 잡히지 않게).
+        for (int y = 2; y < h - 2; y++)
+        for (int x = 2; x < w - 2; x++)
+        {
+            int i = y * w + x;
+            // Scharr 필터: Sobel보다 방향이 정확하다.
+            float gx = 3 * (g[i - w + 1] - g[i - w - 1] + g[i + w + 1] - g[i + w - 1]) + 10 * (g[i + 1] - g[i - 1]);
+            float gy = 3 * (g[i + w - 1] - g[i - w - 1] + g[i + w + 1] - g[i - w + 1]) + 10 * (g[i + w] - g[i - w]);
+            float m = MathF.Sqrt(gx * gx + gy * gy);
+            mag[i] = m;
+            ang[i] = MathF.Atan2(gy, gx) * (180 / MathF.PI);
+            sumMag += m;
+            count++;
+        }
+        float threshold = (float)Math.Max(160, 3 * sumMag / count);
+
+        var hist = new double[bins];
+        double total = 0;
+        for (int i = 0; i < mag.Length; i++)
+        {
+            if (mag[i] < threshold) continue;
+            float a = ((ang[i] % 90) + 90) % 90;
+            hist[(int)(a * TiltBinsPerDegree) % bins] += mag[i];
+            total += mag[i];
+        }
+        if (total <= 0) return (0, 0);
+
+        // ±1° 안의 무게가 가장 큰 곳을 찾는다(0° 둘레만).
+        const int window = TiltBinsPerDegree;
+        double Around(int center)
+        {
+            double s = 0;
+            for (int k = -window; k <= window; k++) s += hist[((center + k) % bins + bins) % bins];
+            return s;
+        }
+        int bestOffset = 0;
+        double bestWeight = -1;
+        for (int off = -TiltSearchDegrees * TiltBinsPerDegree; off <= TiltSearchDegrees * TiltBinsPerDegree; off++)
+        {
+            double weight = Around(off);
+            if (weight > bestWeight) (bestWeight, bestOffset) = (weight, off);
+        }
+
+        // 봉우리 안에서 가중 평균으로 각도를 더 정확히 잡는다(칸 가운데 = +0.5칸).
+        double sumW = 0, sumA = 0;
+        for (int k = -window; k <= window; k++)
+        {
+            double weight = hist[((bestOffset + k) % bins + bins) % bins];
+            sumW += weight;
+            sumA += weight * (bestOffset + k + 0.5) / TiltBinsPerDegree;
+        }
+        float tilt = (float)Math.Abs(sumA / Math.Max(1e-9, sumW));
+
+        // 고르게 퍼져 있을 때보다 몇 배 몰렸는지: 1.5배 이하면 믿지 않고, 5.5배 이상이면 완전히 믿는다.
+        double uniform = (2 * window + 1) / (double)bins;
+        float confidence = (float)Math.Clamp((bestWeight / total / uniform - 1.5) / 4, 0, 1);
+        return (tilt, confidence);
     }
 
     private static byte[] MakeThumbnail(ImageLoader.Pixels px)

@@ -13,5 +13,7 @@
     <Compile Include="..\..\SimilarPhotoCleaner\Core\PhotoAnalyzer.cs" />
     <Compile Include="..\..\SimilarPhotoCleaner\Core\PhotoInfo.cs" />
     <Compile Include="..\..\SimilarPhotoCleaner\Core\Grouper.cs" />
+    <Compile Include="..\..\SimilarPhotoCleaner\ViewModels\PhotoCard.cs" />
+    <Compile Include="..\..\SimilarPhotoCleaner\ViewModels\PhotoGroupView.cs" />
   </ItemGroup>
 </Project>

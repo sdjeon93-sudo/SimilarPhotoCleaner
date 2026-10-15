@@ -22,11 +22,18 @@ public sealed class PhotoInfo
     public bool IsDetailed { get; set; }
     /// <summary>선명도(라플라시안 분산). 같은 묶음 안에서 비교하는 용도. IsDetailed일 때만 의미가 있다.</summary>
     public double Sharpness { get; set; }
+    /// <summary>수평선·수직선이 돌아간 각도(도, 0~45). IsDetailed일 때만 의미가 있다.</summary>
+    public float Tilt { get; set; }
+    /// <summary>Tilt를 얼마나 믿을 수 있는지(0~1). 건물·수평선처럼 곧은 선이 뚜렷할수록 크고, 풀숲처럼 선이 없으면 0에 가깝다.</summary>
+    public float TiltConfidence { get; set; }
     /// <summary>작은 JPEG 썸네일</summary>
     public byte[] ThumbnailJpeg { get; set; } = [];
 
     public DateTime SortTime => TakenAt ?? ModifiedAt;
     public double BytesPerPixel => FileSize / Math.Max(1.0, (double)Width * Height);
+
+    /// <summary>수평이 맞는 정도(0~1). 곧은 선이 뚜렷한데 3° 이상 기울었으면 0, 선이 없으면 판단하지 않고 1에 가깝다.</summary>
+    public double LevelScore => 1 - TiltConfidence * Math.Min(1, Tilt / 3.0);
 
     // ── 이번 실행에서만 쓰는 상태 ──
 
@@ -38,6 +45,8 @@ public sealed class PhotoInfo
     public bool? KeepDecision { get; set; }
     /// <summary>2차 분석이 진행 중인지(중복 작업 방지)</summary>
     public bool DetailInProgress { get; set; }
+    /// <summary>2차 분석에서 원본을 읽지 못함(이번 실행에서는 다시 시도하지 않음)</summary>
+    public bool DetailFailed { get; set; }
 
     public void ResetSessionState()
     {
@@ -45,5 +54,6 @@ public sealed class PhotoInfo
         IsReviewed = false;
         KeepDecision = null;
         DetailInProgress = false;
+        DetailFailed = false;
     }
 }
