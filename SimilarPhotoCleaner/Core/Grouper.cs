@@ -26,11 +26,32 @@ public static class Grouper
     private const float CloseInTimeColorBonus = 0.05f;
     private static readonly TimeSpan CloseInTime = TimeSpan.FromMinutes(3);
 
+    /// <summary>가로세로 비율이 이보다 많이 다르면 묶지 않는다(세로로 긴 스크린샷과 4:3 사진, 가로 사진과 세로 사진 등).</summary>
+    private const double MaxAspectRatioDifference = 1.3;
+    /// <summary>스크린샷끼리는 앱 화면 틀(상단바·키보드 등)이 비슷해서 일반 사진보다 엄격하게 묶는다.</summary>
+    private const int ScreenshotStricter = 3;
+
+    private static readonly string[] ScreenshotWords = ["screenshot", "screen shot", "스크린샷", "캡처", "screencapture"];
+
+    /// <summary>폴더나 파일 이름으로 스크린샷인지 판단한다(안드로이드 DCIM\Screenshots, Windows 스크린샷 폴더, 'Screenshot_…' 파일 등).</summary>
+    public static bool IsScreenshot(string path) =>
+        ScreenshotWords.Any(w => path.Contains(w, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>지우지 않은 사진 중 2장 이상인 묶음들(사진 인덱스 목록)을 돌려준다.</summary>
     public static List<List<int>> Group(IReadOnlyList<PhotoInfo> photos, int level)
     {
         var (maxDistance, minColor) = Limits[Math.Clamp(level, MinLevel, MaxLevel)];
         int n = photos.Count;
+        var screenshot = new bool[n];
+        var folder = new string[n];
+        var aspect = new double[n];
+        for (int i = 0; i < n; i++)
+        {
+            screenshot[i] = IsScreenshot(photos[i].Path);
+            folder[i] = System.IO.Path.GetDirectoryName(photos[i].Path) ?? "";
+            aspect[i] = photos[i].Height > 0 ? (double)photos[i].Width / photos[i].Height : 1;
+        }
+
         var pairs = new List<(int, int)>();
         var gate = new object();
         Parallel.For(0, n, () => new List<(int, int)>(), (i, _, local) =>
@@ -43,8 +64,15 @@ public static class Grouper
                 int distance = Distance(a, b);
                 if (distance > maxDistance + CloseInTimeBonus || b.IsRemoved) continue;
 
+                // 스크린샷과 사진은 섞지 않고, 스크린샷끼리는 같은 폴더 안에서만 엄격하게 묶는다.
+                if (screenshot[i] != screenshot[j]) continue;
+                if (screenshot[i] && !string.Equals(folder[i], folder[j], StringComparison.OrdinalIgnoreCase)) continue;
+                double ratio = aspect[i] > aspect[j] ? aspect[i] / aspect[j] : aspect[j] / aspect[i];
+                if (ratio > MaxAspectRatioDifference) continue;
+
                 bool close = a.TakenAt is { } ta && b.TakenAt is { } tb && (ta - tb).Duration() <= CloseInTime;
-                if (distance > maxDistance + (close ? CloseInTimeBonus : 0)) continue;
+                int limit = maxDistance + (close ? CloseInTimeBonus : 0) - (screenshot[i] ? ScreenshotStricter : 0);
+                if (distance > limit) continue;
                 float color = PhotoAnalyzer.ColorSimilarity(a.ColorHistogram, b.ColorHistogram);
                 if (color < minColor - (close ? CloseInTimeColorBonus : 0)) continue;
                 local.Add((i, j));

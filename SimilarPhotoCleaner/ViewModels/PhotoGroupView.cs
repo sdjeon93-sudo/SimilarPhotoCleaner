@@ -25,7 +25,7 @@ public sealed class PhotoGroupView : ObservableObject
         Cards = photos.Select(p => new PhotoCard(p, root)).ToList();
 
         // 묶음을 다시 만들 때, 모든 사진에 이미 고른 결과가 있으면 그대로 '선택됨'으로 되살린다.
-        if (Cards.All(c => c.Info.KeepDecision != null) && Cards.Any(c => c.Info.KeepDecision == true))
+        if (Cards.All(c => c.Info.KeepDecision != null))
         {
             foreach (var c in Cards) c.IsKept = c.Info.KeepDecision == true;
             UserTouched = true;

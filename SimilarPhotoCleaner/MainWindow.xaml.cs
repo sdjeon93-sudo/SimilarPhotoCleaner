@@ -17,7 +17,7 @@ namespace SimilarPhotoCleaner;
 public partial class MainWindow : Window
 {
     private const string DefaultHint =
-        "← → 사진 넘기기(보고 있는 사진을 남김) · 사진의 ✓ 단추나 Space: 여러 장 남기기 · Enter 선택 완료 · S 나중에 · ↑ ↓ 묶음 이동 · 휠 확대";
+        "← → 사진 넘기기(보고 있는 사진을 남김) · ✓ 단추나 Space: 여러 장 남기기 · Delete: 모두 지우기 · Enter 선택 완료 · S 나중에 · ↑ ↓ 묶음 이동 · 휠 확대";
 
     private readonly AppSettings _settings = AppSettings.Load();
     private readonly AnalysisCache _cache = new();
@@ -746,7 +746,7 @@ public partial class MainWindow : Window
         {
             if (cards[j].IsRemoved) continue;
             // 한 장만 남기는 중이면 보고 있는 사진이 곧 남길 사진이 된다.
-            FocusCard(cards[j], keepIt: KeptCount() <= 1);
+            FocusCard(cards[j], keepIt: KeptCount() == 1);
             return;
         }
     }
@@ -756,13 +756,10 @@ public partial class MainWindow : Window
     private void ToggleKeep(PhotoCard card)
     {
         if (card.IsRemoved) return;
-        if (card.IsKept && KeptCount() == 1)
-        {
-            FlashHint("최소 한 장은 남겨야 해요.");
-            return;
-        }
         card.IsKept = !card.IsKept;
         OnKeepChanged();
+        if (KeptCount() == 0)
+            FlashHint("이 묶음은 사진을 모두 지워요. 다시 남기려면 사진의 ✓ 단추를 누르세요.", error: false);
         UpdatePreviewState();
         UpdateActionBar();
     }
@@ -783,11 +780,6 @@ public partial class MainWindow : Window
     {
         var group = _current;
         if (group == null) return;
-        if (KeptCount() == 0)
-        {
-            FlashHint("남길 사진을 한 장 이상 골라 주세요.");
-            return;
-        }
         if (group.State != GroupState.Cleaned || group.CardsToRemove.Any())
         {
             group.State = GroupState.Selected;
@@ -825,8 +817,10 @@ public partial class MainWindow : Window
         var items = groups.SelectMany(g => g.CardsToRemove).ToList();
         if (confirm && items.Count > 0)
         {
+            int wiped = groups.Count(g => g.AliveCards.Any() && g.AliveCards.All(c => !c.IsKept));
+            string wipedText = wiped > 0 ? $"\n(이 중 묶음 {wiped}개는 사진을 한 장도 남기지 않고 모두 지워요.)" : "";
             var answer = MessageBox.Show(this,
-                $"선택한 묶음 {groups.Count}개에서 고르지 않은 사진 {items.Count}장({Format.Size(items.Sum(c => c.Info.FileSize))})을 {RemoveWhereText}.\n\n계속할까요?",
+                $"선택한 묶음 {groups.Count}개에서 고르지 않은 사진 {items.Count}장({Format.Size(items.Sum(c => c.Info.FileSize))})을 {RemoveWhereText}.{wipedText}\n\n계속할까요?",
                 "선택한 묶음 정리", MessageBoxButton.OKCancel, MessageBoxImage.Question);
             if (answer != MessageBoxResult.OK) return false;
         }
@@ -1071,7 +1065,7 @@ public partial class MainWindow : Window
         if (_removedCount > 0) lines.Add($"정리한 사진 {_removedCount:N0}장 ({Format.Size(_removedBytes)})");
         if (_scanNote.Length > 0) lines.Add(_scanNote);
         if (_root != null && FileRemover.IsPhoneLinkPath(_root))
-            lines.Add("휴대폰 연결 폴더예요. 휴대폰 사진을 지우려면 'Windows와 연결' 앱에 '모든 파일 관리' 권한이 있어야 해요.");
+            lines.Add("휴대폰 연결 폴더예요. 카메라로 찍은 사진은 안드로이드 보안 때문에 PC에서 지워지지 않을 수 있어요.");
         GroupSummaryText.Text = string.Join("\n", lines);
     }
 
@@ -1082,16 +1076,17 @@ public partial class MainWindow : Window
     private void ShowPhoneHelp(int failed, int done, int errorCode)
     {
         string doneText = done > 0 ? $" ({done}장은 정리했어요)" : "";
-        ShowInfo("휴대폰이 사진 지우기를 막았어요",
+        // 'Windows와 연결' 앱은 '사진 및 동영상' 권한만 받을 수 있어서, 다른 앱(카메라)이 만든 사진은 지우거나 옮기지 못한다.
+        // 휴대폰의 권한 화면에는 이를 풀어 줄 항목이 없다(2026-10-15 사용자 휴대폰에서 확인).
+        ShowInfo("휴대폰 사진은 PC에서 지울 수 없었어요",
             $"사진 {failed}장을 정리하지 못했어요{doneText}.\n" +
-            "휴대폰의 사진 폴더는 보호되어 있어서, 휴대폰의 'Windows와 연결' 앱에 '모든 파일 관리' 권한이 있어야 PC에서 지울 수 있어요.\n\n" +
-            "휴대폰에서 (메뉴 이름은 휴대폰마다 조금 다를 수 있어요)\n" +
-            "1. 설정 → 애플리케이션 → 'Windows와 연결' → 권한\n" +
-            "2. '파일 및 미디어'(또는 '저장공간')에서 '모든 파일 관리 허용'을 고르기\n" +
-            "    안 보이면: 설정 → 애플리케이션 → 오른쪽 위 ⋮ → 특별한 접근 → 모든 파일 접근 → 'Windows와 연결' 켜기\n" +
-            "3. 권한을 바꾼 뒤 아래 '다시 시도'를 누르세요.\n\n" +
+            "'휴대폰과 연결'(Windows와 연결)로 연 휴대폰 사진 폴더는 안드로이드 보안 때문에 카메라로 찍은 사진을 PC에서 지우거나 옮길 수 없어요. " +
+            "휴대폰의 앱 권한을 모두 허용해도 바뀌지 않아요.\n\n" +
+            "이렇게 해 보세요\n" +
+            "• 휴대폰 사진을 PC 폴더로 옮겨(복사 후 휴대폰에서 지우기) 이 프로그램으로 정리하기\n" +
+            "• 또는 휴대폰을 USB 케이블로 연결해 '파일 전송'을 고른 뒤, 휴대폰 갤러리에서 직접 지우기\n\n" +
             $"고른 묶음은 '선택됨'으로 남겨 두었어요. (오류 코드 0x{errorCode:X8})",
-            "다시 시도", () => ApplySelected(confirm: false), "닫기", null);
+            "확인", null, "다시 시도", () => ApplySelected(confirm: false));
     }
 
     private void UpdateActionBar()
@@ -1106,7 +1101,8 @@ public partial class MainWindow : Window
         int keep = group.AliveCards.Count(c => c.IsKept);
         var remove = group.CardsToRemove.ToList();
         string removeText = remove.Count == 0 ? "지울 사진 없음" : $"지울 사진 {remove.Count}장 ({Format.Size(remove.Sum(c => c.Info.FileSize))})";
-        SelectionText.Text = $"{group.Title} [{group.StateLabel}] · 남길 사진 {keep}장 · {removeText}";
+        string keepText = keep == 0 && remove.Count > 0 ? "남길 사진 없음(모두 지움)" : $"남길 사진 {keep}장";
+        SelectionText.Text = $"{group.Title} [{group.StateLabel}] · {keepText} · {removeText}";
 
         DeferButton.IsEnabled = group.State != GroupState.Cleaned;
         DeferText.Text = group.State == GroupState.Selected ? "선택 취소하고 나중에 (S)" : "나중에 고르기 (S)";
@@ -1302,6 +1298,7 @@ public partial class MainWindow : Window
             case Key.Up or Key.PageUp: GoGroup(-1); break;
             case Key.Down or Key.PageDown: GoGroup(1); break;
             case Key.Space when _focused != null: ToggleKeep(_focused); break;
+            case Key.Delete: KeepNone(); break;
             case Key.Enter when ctrl: ApplySelected(confirm: true); break;
             case Key.Enter: SelectCurrent(); break;
             case Key.S when !ctrl: Defer(); break;
@@ -1408,6 +1405,37 @@ public partial class MainWindow : Window
         if (GroupList.SelectedItem is PhotoGroupView group && group != _current) ShowGroup(group);
     }
 
+    /// <summary>
+    /// 묶음 목록 항목은 키보드 초점을 받지 않게(Focusable=False) 해 두었는데, ListBoxItem은 초점을 못 받으면
+    /// 클릭해도 선택되지 않는다. 그래서 클릭한 항목의 묶음을 직접 연다.
+    /// </summary>
+    private void GroupList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        for (var d = e.OriginalSource as DependencyObject; d != null && d != GroupList; d = VisualTreeHelper.GetParent(d))
+        {
+            if (d is ListBoxItem { DataContext: PhotoGroupView group })
+            {
+                if (group != _current) ShowGroup(group);
+                return;
+            }
+        }
+    }
+
+    /// <summary>Delete: 이 묶음의 사진을 하나도 남기지 않는다(모두 지우기). 다시 누르면 추천 사진 한 장을 남긴다.</summary>
+    private void KeepNone()
+    {
+        if (_current == null) return;
+        var alive = _current.AliveCards.ToList();
+        if (alive.Count == 0) return;
+        bool none = alive.All(c => !c.IsKept);
+        var restore = alive.FirstOrDefault(c => c.IsRecommended) ?? _focused ?? alive[0];
+        foreach (var c in alive) c.IsKept = none && c == restore;
+        OnKeepChanged();
+        UpdatePreviewState();
+        UpdateActionBar();
+        FlashHint(none ? "추천 사진 한 장을 다시 남겼어요." : "이 묶음은 사진을 모두 지워요. 다시 남기려면 ✓ 단추나 Delete를 누르세요.", error: false);
+    }
+
     private void Card_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not PhotoCard card) return;
@@ -1424,8 +1452,8 @@ public partial class MainWindow : Window
         }
         else
         {
-            // 한 장만 남기는 중이면 누른 사진이 남길 사진이 된다. 여러 장을 골라 둔 상태면 크게 보기만 바꾼다.
-            FocusCard(card, keepIt: KeptCount() <= 1);
+            // 한 장만 남기는 중이면 누른 사진이 남길 사진이 된다. 여러 장을 골랐거나 모두 지우기로 한 상태면 크게 보기만 바꾼다.
+            FocusCard(card, keepIt: KeptCount() == 1);
         }
     }
 
