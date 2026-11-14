@@ -22,14 +22,17 @@ public static class Grouper
         (20, 0.50f),
     ];
 
-    private const int CloseInTimeBonus = 5;
-    private const float CloseInTimeColorBonus = 0.05f;
-    private static readonly TimeSpan CloseInTime = TimeSpan.FromMinutes(3);
+    /// <summary>단계별 기준(구도 지문 허용 차이 비트 수, 최소 색 유사도). 기준 설명 창과 슬라이더 툴팁도 이 값을 보여 준다.</summary>
+    public static (int Distance, float Color) LimitsFor(int level) => Limits[Math.Clamp(level, MinLevel, MaxLevel)];
+
+    public const int CloseInTimeBonus = 5;
+    public const float CloseInTimeColorBonus = 0.05f;
+    public static readonly TimeSpan CloseInTime = TimeSpan.FromMinutes(3);
 
     /// <summary>가로세로 비율이 이보다 많이 다르면 묶지 않는다(세로로 긴 스크린샷과 4:3 사진, 가로 사진과 세로 사진 등).</summary>
-    private const double MaxAspectRatioDifference = 1.3;
+    public const double MaxAspectRatioDifference = 1.3;
     /// <summary>스크린샷끼리는 앱 화면 틀(상단바·키보드 등)이 비슷해서 일반 사진보다 엄격하게 묶는다.</summary>
-    private const int ScreenshotStricter = 3;
+    public const int ScreenshotStricter = 3;
 
     private static readonly string[] ScreenshotWords = ["screenshot", "screen shot", "스크린샷", "캡처", "screencapture"];
 
@@ -40,7 +43,7 @@ public static class Grouper
     /// <summary>지우지 않은 사진 중 2장 이상인 묶음들(사진 인덱스 목록)을 돌려준다.</summary>
     public static List<List<int>> Group(IReadOnlyList<PhotoInfo> photos, int level)
     {
-        var (maxDistance, minColor) = Limits[Math.Clamp(level, MinLevel, MaxLevel)];
+        var (maxDistance, minColor) = LimitsFor(level);
         int n = photos.Count;
         var screenshot = new bool[n];
         var folder = new string[n];

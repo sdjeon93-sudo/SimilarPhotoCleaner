@@ -67,6 +67,7 @@ public partial class MainWindow : Window
         HintText.Text = DefaultHint;
 
         LevelSlider.Value = Math.Clamp(_settings.Level, Grouper.MinLevel, Grouper.MaxLevel);
+        UpdateLevelToolTip();
         SubfoldersCheck.IsChecked = _settings.IncludeSubfolders;
         RemoveModeCombo.SelectedIndex = Math.Clamp(_settings.RemoveMode, 0, 1);
         ApplyFolderPaneVisibility();
@@ -1032,14 +1033,17 @@ public partial class MainWindow : Window
         InfoOverlay.Visibility = Visibility.Collapsed;
 
         if (restored.Count < entry.Moves.Count)
+        {
+            _undo.Push(new UndoEntry(entry.Groups, entry.Moves.Where(m => !restored.Contains(m.From)).ToList()));
             MessageBox.Show(this, $"사진 {entry.Moves.Count - restored.Count}장은 되돌리지 못했어요. '{FileRemover.MovedFolderName}' 폴더를 확인해 주세요.",
                 "되돌리기", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
 
         var first = entry.Groups.FirstOrDefault();
         if (first != null && _groups.Contains(first)) ShowGroup(first);
         else _ = RegroupAsync();
         RefreshStatus();
-        FlashHint($"사진 {restored.Count}장을 제자리로 돌려놓았어요. 그 묶음들은 다시 '선택됨'이에요.", error: false);
+        FlashHint($"사진 {restored.Count}장을 제자리로 돌려놓았어요.", error: false);
     }
 
     /// <summary>
@@ -1258,7 +1262,7 @@ public partial class MainWindow : Window
     {
         var selected = _groups.Where(g => g.State == GroupState.Selected).ToList();
         var items = selected.SelectMany(g => g.CardsToRemove).ToList();
-        BatchPanel.IsEnabled = _groups.Count > 0;
+        BatchPanel.IsEnabled = _groups.Count > 0 || _undo.Count > 0;
         QuickButton.IsEnabled = _groups.Any(g => g.State != GroupState.Cleaned);
         BatchButton.IsEnabled = selected.Count > 0;
         BatchButtonText.Text = selected.Count == 0 ? "선택한 묶음 정리하기" : $"선택한 묶음 {selected.Count}개 정리하기";
@@ -1428,6 +1432,18 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
+        if (ctrl && e.Key == Key.Z)
+        {
+            Undo();
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.F1)
+        {
+            ShowCriteria();
+            e.Handled = true;
+            return;
+        }
         if (_current == null || RemoveModeCombo.IsDropDownOpen) return;
 
         switch (e.Key)
@@ -1441,7 +1457,6 @@ public partial class MainWindow : Window
             case Key.Enter when ctrl: ApplySelected(confirm: true); break;
             case Key.Enter: SelectCurrent(); break;
             case Key.S when !ctrl: Defer(); break;
-            case Key.Z when ctrl: Undo(); break;
             case Key.Escape: ResetZoom(); break;
             default: return;
         }
@@ -1449,6 +1464,55 @@ public partial class MainWindow : Window
     }
 
     private void PickFolder_Click(object sender, RoutedEventArgs e) => PickFolder();
+
+    private void BulkDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if (ProgressOverlay.Visibility == Visibility.Visible || _quickCts != null) return;
+        if (_root == null)
+        {
+            MessageBox.Show(this, "먼저 정리할 사진 폴더를 선택해 주세요.", "일괄 지우기");
+            return;
+        }
+        var dialog = new BulkDeleteWindow(_root) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is not { } result) return;
+
+        var known = _photos.ToDictionary(p => p.Path, StringComparer.OrdinalIgnoreCase);
+        var moves = new List<(PhotoCard Card, string From, string To)>();
+        var affected = new HashSet<PhotoGroupView>();
+        foreach (var (item, destination) in result.Moved)
+        {
+            var info = known.GetValueOrDefault(item.Path) ?? new PhotoInfo
+            {
+                Path = item.Path, FileSize = item.Length, ModifiedUtc = item.ModifiedUtc,
+            };
+            PhotoCard card;
+            if (_cardOf.TryGetValue(info, out var pair))
+            {
+                card = pair.Card;
+                affected.Add(pair.Group);
+            }
+            else card = new PhotoCard(info, _root);
+            card.IsRemoved = true;
+            _removedCount++;
+            _removedBytes += info.FileSize;
+            _previews.Remove(item.Path);
+            moves.Add((card, item.Path, destination));
+        }
+        foreach (var group in affected)
+        {
+            if (!group.AliveCards.Any()) group.State = GroupState.Cleaned;
+            group.RefreshCounts();
+        }
+        if (moves.Count > 0) _undo.Push(new UndoEntry(affected.ToList(), moves));
+        RefreshStatus();
+        UpdatePreview();
+        ShowInfo($"사진 {moves.Count:N0}장을 복구 폴더로 옮겼어요",
+            $"복구 위치: {Path.Combine(_root, FileRemover.MovedFolderName)}\n\n" +
+            "이 화면에서 '되돌리기'를 누르면 원래 위치로 복구합니다. 앱을 닫거나 폴더를 바꾼 뒤에는 복구 폴더에서 직접 옮겨 주세요.\n" +
+            (result.Failed.Count > 0 ? $"\n{result.Failed.Count:N0}장은 변경되었거나 접근할 수 없어 옮기지 않았어요. 다시 확인해 주세요.\n" +
+                string.Join("\n", result.Failed.Take(8)) : "문서와 동영상은 그대로 남겨 두었어요."),
+            moves.Count > 0 ? "되돌리기" : "확인", moves.Count > 0 ? Undo : null, "닫기", null);
+    }
 
     private void Rescan_Click(object sender, RoutedEventArgs e)
     {
@@ -1514,9 +1578,41 @@ public partial class MainWindow : Window
     private void InfoPrimary_Click(object sender, RoutedEventArgs e) => CloseInfo(_infoPrimary);
     private void InfoSecondary_Click(object sender, RoutedEventArgs e) => CloseInfo(_infoSecondary);
 
+    private readonly ToolTip _levelToolTip = new() { MaxWidth = 400, Padding = new Thickness(12, 10, 12, 10) };
+
+    /// <summary>묶는 기준 슬라이더의 툴팁: 지금 단계의 뜻과 실제 기준값, 다른 단계 목록. 단계가 바뀔 때마다 다시 만든다.</summary>
+    private void UpdateLevelToolTip()
+    {
+        int level = (int)LevelSlider.Value;
+        var (distance, color) = Grouper.LimitsFor(level);
+        var panel = new StackPanel();
+        TextBlock Line(string text, double top = 0, bool bold = false, Brush? brush = null, double size = 12) => new()
+        {
+            Text = text, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, top, 0, 0), FontSize = size,
+            FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
+            Foreground = brush ?? (Brush)FindResource("TextBrush"),
+        };
+        panel.Children.Add(Line($"묶는 기준: {CriteriaWindow.LevelName(level)}", bold: true, size: 13));
+        panel.Children.Add(Line(CriteriaWindow.LevelSummary(level), 4));
+        panel.Children.Add(Line(
+            $"구도 차이 {distance}칸 이하(64칸 중), 색 비슷함 {color:P0} 이상이면 같은 묶음이에요. " +
+            $"{Grouper.CloseInTime.TotalMinutes:0}분 안에 찍은 사진은 조금 더 너그럽게 봐요.", 4, brush: (Brush)FindResource("MutedBrush")));
+        for (int l = Grouper.MinLevel; l <= Grouper.MaxLevel; l++)
+            panel.Children.Add(Line($"{(l == level ? "●" : "○")} {CriteriaWindow.LevelName(l)} — {CriteriaWindow.LevelSummary(l)}",
+                l == Grouper.MinLevel ? 10 : 3, bold: l == level, brush: l == level ? (Brush)FindResource("PrimaryBrush") : null));
+        panel.Children.Add(Line("자세한 기준은 오른쪽 '기준 설명'(F1)에서 볼 수 있어요.", 10, brush: (Brush)FindResource("MutedBrush"), size: 11));
+        _levelToolTip.Content = panel;
+        LevelPanel.ToolTip = _levelToolTip;
+    }
+
+    private void Criteria_Click(object sender, RoutedEventArgs e) => ShowCriteria();
+
+    private void ShowCriteria() => new CriteriaWindow((int)LevelSlider.Value) { Owner = this }.ShowDialog();
+
     private async void LevelSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (!_ready) return;
+        UpdateLevelToolTip();
         _settings.Level = (int)LevelSlider.Value;
         _settings.Save();
         if (_photos.Count == 0) return;

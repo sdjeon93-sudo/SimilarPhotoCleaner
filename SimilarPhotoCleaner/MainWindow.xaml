@@ -22,6 +22,9 @@
                             <TextBlock Text="좋은 순간만, 가볍게 남기세요" FontSize="11" Foreground="{StaticResource MutedBrush}"/>
                         </StackPanel>
                     </StackPanel>
+                    <Button x:Name="BulkDeleteButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}"
+                            Content="일괄 지우기…" Foreground="#C43D3D" Margin="8,0,0,0" Click="BulkDelete_Click"
+                            ToolTip="현재 폴더의 모든 사진을 확인한 뒤 복구 폴더로 옮깁니다. 남기기로 고른 사진도 포함됩니다."/>
                     <Button x:Name="RescanButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Click="Rescan_Click" IsEnabled="False" Margin="12,0,0,0" ToolTip="같은 폴더를 다시 검사합니다">
                         <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE72C;"/><TextBlock Text="다시 검사"/></StackPanel>
                     </Button>
@@ -72,12 +75,24 @@
                 </DockPanel>
                 <Border Background="#F8F8FA" CornerRadius="14" Padding="14,5" Margin="0,12,0,0">
                     <DockPanel>
+                        <Button x:Name="CriteriaButton" DockPanel.Dock="Right" Style="{StaticResource CrumbButton}" Margin="16,0,0,0"
+                                Click="Criteria_Click" ToolTip="사진을 묶는 기준, 선명도·구도 판단, 추천 기준을 설명합니다 (F1)"
+                                AutomationProperties.Name="기준 설명">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE946;" Foreground="{StaticResource PrimaryBrush}"/>
+                                <TextBlock Text="기준 설명"/>
+                            </StackPanel>
+                        </Button>
                         <CheckBox x:Name="SubfoldersCheck" DockPanel.Dock="Right" Style="{StaticResource SwitchCheckBox}" Content="하위 폴더 포함" Focusable="False" VerticalAlignment="Center" Margin="16,0,0,0" Click="SubfoldersCheck_Click"/>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="묶는 기준" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,16,0"/>
-                            <TextBlock Text="엄격" Foreground="{StaticResource MutedBrush}" FontSize="11" VerticalAlignment="Center"/>
-                            <Slider x:Name="LevelSlider" Style="{StaticResource IosSlider}" Width="132" Margin="10,0" VerticalAlignment="Center" Minimum="1" Maximum="5" Value="3" TickFrequency="1" IsSnapToTickEnabled="True" Focusable="False" ValueChanged="LevelSlider_ValueChanged" AutomationProperties.Name="사진 묶는 기준" ToolTip="느슨하게 할수록 조금 덜 비슷한 사진도 같은 묶음으로 모읍니다"/>
-                            <TextBlock Text="느슨" Foreground="{StaticResource MutedBrush}" FontSize="11" VerticalAlignment="Center"/>
+                            <!-- 툴팁은 단계가 바뀔 때마다 UpdateLevelToolTip이 만든다 -->
+                            <StackPanel x:Name="LevelPanel" Orientation="Horizontal" Background="Transparent"
+                                        ToolTipService.ShowDuration="60000" ToolTipService.InitialShowDelay="300">
+                                <TextBlock Text="묶는 기준" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                <TextBlock Text="엄격" Foreground="{StaticResource MutedBrush}" FontSize="11" VerticalAlignment="Center"/>
+                                <Slider x:Name="LevelSlider" Style="{StaticResource IosSlider}" Width="132" Margin="10,0" VerticalAlignment="Center" Minimum="1" Maximum="5" Value="3" TickFrequency="1" IsSnapToTickEnabled="True" Focusable="False" ValueChanged="LevelSlider_ValueChanged" AutomationProperties.Name="사진 묶는 기준"/>
+                                <TextBlock Text="느슨" Foreground="{StaticResource MutedBrush}" FontSize="11" VerticalAlignment="Center"/>
+                            </StackPanel>
                             <Rectangle Width="1" Height="20" Fill="{StaticResource LineBrush}" Margin="20,0"/>
                             <TextBlock Text="정리 방식" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0"/>
                             <ComboBox x:Name="RemoveModeCombo" Style="{StaticResource IosComboBox}" Width="216" Focusable="False" VerticalAlignment="Center" SelectionChanged="RemoveModeCombo_SelectionChanged" AutomationProperties.Name="사진 정리 방식">

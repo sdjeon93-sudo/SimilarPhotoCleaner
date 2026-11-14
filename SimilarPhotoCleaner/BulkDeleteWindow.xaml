@@ -1,0 +1,33 @@
+<Window x:Class="SimilarPhotoCleaner.BulkDeleteWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="현재 폴더 사진 일괄 지우기" Width="660" Height="710" MinWidth="600" MinHeight="620"
+ WindowStartupLocation="CenterOwner" Background="{StaticResource BgBrush}" Foreground="{StaticResource TextBrush}"
+ FontFamily="Segoe UI, Malgun Gothic" FontSize="13" Closing="Window_Closing">
+ <Grid Margin="24">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <StackPanel>
+   <TextBlock Text="이 폴더의 사진을 모두 지울까요?" FontSize="23" FontWeight="Bold"/>
+   <TextBlock x:Name="RootText" Margin="0,10,0,12" TextWrapping="Wrap"/>
+   <Border Background="#FFF0E9" CornerRadius="10" Padding="14">
+    <TextBlock Text="추천 사진 · 남기기로 고른 사진 · 묶이지 않은 사진도 모두 대상입니다.&#10;사진 파일만 대상으로 하며 문서, 동영상, 폴더는 지우지 않습니다.&#10;영구 삭제 대신 '_지운 사진' 폴더로 이동합니다. 저장 공간은 비워지지 않습니다."
+     TextWrapping="Wrap" LineHeight="22" Foreground="#8C3916"/>
+   </Border>
+   <CheckBox x:Name="IncludeChildren" Content="하위 폴더의 사진도 포함" Margin="0,16,0,12" Click="Scope_Changed"/>
+   <TextBlock x:Name="SummaryText" FontWeight="SemiBold" Margin="0,0,0,8" TextWrapping="Wrap"/>
+  </StackPanel>
+  <ListBox x:Name="FileList" Grid.Row="1" DisplayMemberPath="RelativePath" MinHeight="60"
+   ScrollViewer.HorizontalScrollBarVisibility="Auto" VirtualizingPanel.IsVirtualizing="True"/>
+  <StackPanel Grid.Row="2" Margin="0,14,0,0">
+   <TextBlock Text="목록에서 제외: 숨김·시스템 파일, 연결 폴더, '_지운 사진' 폴더" FontSize="11" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"/>
+   <CheckBox x:Name="Acknowledged" Content="남기기로 고른 사진도 포함되는 것을 확인했습니다." Margin="0,12,0,10" Click="Confirmation_Changed"/>
+   <TextBlock x:Name="NamePrompt" TextWrapping="Wrap"/>
+   <TextBox x:Name="FolderNameInput" Margin="0,8,0,12" Padding="10,7" TextChanged="Confirmation_Changed" AutomationProperties.Name="확인할 폴더 이름"/>
+   <DockPanel LastChildFill="False">
+    <Button x:Name="ConfirmButton" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Background="#C43D3D"
+     Content="사진 일괄 지우기" Focusable="True" IsEnabled="False" Click="Confirm_Click"/>
+    <Button x:Name="CancelButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="취소" Margin="0,0,8,0" IsCancel="True"/>
+   </DockPanel>
+  </StackPanel>
+ </Grid>
+</Window>

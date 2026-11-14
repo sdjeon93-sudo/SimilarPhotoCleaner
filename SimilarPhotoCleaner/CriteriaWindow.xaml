@@ -1,0 +1,129 @@
+<Window x:Class="SimilarPhotoCleaner.CriteriaWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="사진을 고르는 기준" Width="640" Height="760" MinWidth="520" MinHeight="420"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="CanResizeWithGrip"
+        Background="{StaticResource BgBrush}" Foreground="{StaticResource TextBrush}"
+        FontFamily="Segoe UI, Malgun Gothic" FontSize="13" UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
+    <Window.Resources>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+            <Setter Property="CornerRadius" Value="14"/>
+            <Setter Property="Padding" Value="20,16,20,18"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+        <Style x:Key="CardTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+        <Style x:Key="Body" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="LineHeight" Value="21"/>
+        </Style>
+        <Style x:Key="Point" TargetType="TextBlock" BasedOn="{StaticResource Body}">
+            <Setter Property="Margin" Value="0,6,0,0"/>
+        </Style>
+        <Style x:Key="Note" TargetType="TextBlock" BasedOn="{StaticResource Body}">
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0,8,0,0"/>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel>
+        <Border DockPanel.Dock="Bottom" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}"
+                BorderThickness="0,1,0,0" Padding="20,12">
+            <DockPanel LastChildFill="False">
+                <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="닫기" IsCancel="True" IsDefault="True"
+                        Focusable="True" Click="Close_Click"/>
+                <TextBlock VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" FontSize="12"
+                           Text="F1을 누르면 언제든 이 창을 다시 열 수 있어요."/>
+            </DockPanel>
+        </Border>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
+            <StackPanel Margin="24,22,24,12">
+                <TextBlock Text="사진을 고르는 기준" FontSize="23" FontWeight="Bold"/>
+                <TextBlock Style="{StaticResource Note}" Margin="0,6,0,16"
+                           Text="비슷한 사진을 어떻게 묶고, 어떤 사진을 남기라고 추천하는지 간단히 정리했어요."/>
+
+                <!-- 1. 묶는 기준 -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="1. 비슷한 사진을 묶는 기준"/>
+                        <TextBlock Style="{StaticResource Body}"
+                                   Text="두 사진이 아래 두 가지를 모두 만족하면 같은 묶음이 돼요. A와 B, B와 C가 비슷하면 A·B·C가 한 묶음이에요."/>
+                        <TextBlock Style="{StaticResource Point}">
+                            <Run FontWeight="SemiBold" Text="구도가 비슷함 · "/><Run Text="사진을 작은 흑백 그림으로 줄여 64칸짜리 '구도 지문'을 만들고, 서로 다른 칸 수를 셉니다. 밝기가 조금 다르거나 살짝 흔들려도 지문은 거의 같아요. 가운데 80%만 따로 비교해서 조금 당겨 찍은 사진도 찾아요."/>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource Point}">
+                            <Run FontWeight="SemiBold" Text="색이 비슷함 · "/><Run Text="밝기와 상관없이 색의 비율이 얼마나 겹치는지 봅니다. 구도는 같아도 색이 전혀 다른 사진은 따로 둬요."/>
+                        </TextBlock>
+                        <TextBlock x:Name="BonusText" Style="{StaticResource Point}"/>
+                        <TextBlock x:Name="ExceptionText" Style="{StaticResource Point}"/>
+
+                        <TextBlock Text="묶는 기준 단계 (위쪽 슬라이더)" FontWeight="SemiBold" Margin="0,16,0,6"/>
+                        <Border BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="10">
+                            <Grid x:Name="LevelTable">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                            </Grid>
+                        </Border>
+                        <TextBlock Style="{StaticResource Note}"
+                                   Text="'구도 차이'는 64칸 중 다른 칸 수의 한도이고, '색 비슷함'은 색 비율이 겹쳐야 하는 최소 정도예요. 지금 쓰는 단계는 파란색으로 표시했어요."/>
+                    </StackPanel>
+                </Border>
+
+                <!-- 2. 선명도 · 구도 -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="2. 선명도와 구도를 판단하는 기준"/>
+                        <TextBlock Style="{StaticResource Body}"
+                                   Text="사진 카드 아래의 막대 두 개예요. 묶음에 든 사진만 원본을 읽어서 계산하고, 계산하는 동안에는 '계산 중…'이 보여요."/>
+                        <TextBlock Style="{StaticResource Point}">
+                            <Run FontWeight="SemiBold" Text="선명도 · "/><Run Text="가장자리가 얼마나 또렷한지 잽니다. 흔들리거나 초점이 나간 사진일수록 낮아요. 밝기에 따라 달라지지 않게 맞춰서, 밝게 찍힌 사진을 더 선명하다고 보지 않아요. 막대는 묶음에서 가장 선명한 사진을 끝까지 채운 기준이에요."/>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource Point}">
+                            <Run FontWeight="SemiBold" Text="구도 · "/><Run Text="두 가지를 반씩 봅니다."/>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource Point}" Margin="14,4,0,0"
+                                   Text="· 수평: 건물·수평선처럼 곧은 선이 뚜렷한 사진은 기울기를 잽니다. 3° 이상 기울면 0점이에요. 곧은 선이 없는 사진(풀숲·하늘 등)은 기울기를 따지지 않아요."/>
+                        <TextBlock Style="{StaticResource Point}" Margin="14,4,0,0"
+                                   Text="· 비슷한 구도: 묶음의 다른 사진들과 구도가 비슷할수록 높아요. 사람이 끼어들었거나 혼자 많이 비뚤어진 사진이 낮게 나와요."/>
+                    </StackPanel>
+                </Border>
+
+                <!-- 3. 추천 · 빠르게 정리하기 -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="3. 추천(★)과 빠르게 정리하기"/>
+                        <TextBlock Style="{StaticResource Body}">
+                            <Run Text="묶음마다 점수가 가장 높은 사진에 ★ 추천이 붙고, 처음에는 그 사진이 남길 사진으로 골라져 있어요."/>
+                        </TextBlock>
+                        <Border Background="{StaticResource PrimarySoftBrush}" CornerRadius="10" Padding="14,10" Margin="0,10,0,0">
+                            <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" Foreground="{StaticResource PrimaryBrush}"
+                                       Text="점수 = 선명도 40% + 구도 40% + 해상도 20%"/>
+                        </Border>
+                        <TextBlock Style="{StaticResource Note}"
+                                   Text="선명도 계산이 끝나기 전에는 화소당 파일 크기(선명한 사진일수록 JPEG가 커짐)로 잠깐 골라 두고, 계산이 끝나면 다시 골라요. 직접 고른 묶음은 바꾸지 않아요."/>
+                        <TextBlock x:Name="QuickText" Style="{StaticResource Point}" Margin="0,12,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- 4. 보지 않는 것 -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="알아 두세요"/>
+                        <TextBlock Style="{StaticResource Body}"
+                                   Text="얼굴 표정, 눈 감김, 삼등분 구도처럼 사람이 보는 '좋은 사진'의 기준은 판단하지 않아요. 무늬나 노이즈가 많은 사진을 선명하다고 볼 때도 있어요. 중요한 사진은 '빠르게 정리하기'에서 '아니요(골라 두기만)'를 고른 뒤 확인하고 정리하세요."/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>
